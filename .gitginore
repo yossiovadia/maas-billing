@@ -1,0 +1,21 @@
+# K8s
+*.kubeconfig
+kubeconfig*
+
+# Certificates and secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+.vscode
+
+# Temporary files
+*.tmp
+*.temp
