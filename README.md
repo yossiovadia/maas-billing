@@ -1,8 +1,8 @@
 # Models as a Service Billing
 
-This repository shows how to run AI models as HTTP APIs on Kubernetes.  
 The deployment uses **Kuadrant** together with Istio, Gateway API, and KServe to provide policy,
-authentication, rate-limiting, chargeback and observability. Chargeback is a WIP in upstream Kuadrant metrics.
+authentication, rate-limiting, chargeback and observability for Models as a Service. Chargeback
+is a WIP in upstream Kuadrant metrics.
 
 ## Kuadrant deployment
 
