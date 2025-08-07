@@ -6,19 +6,19 @@ set -euo pipefail
 #
 # Examples
 #   ./test-request-limits.sh
-#     → uses default simulator: http://simulator.maas.local:8000
+#     → uses default simulator: http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com
 #
-#   ./test-request-limits.sh --host qwen3.maas.local --model qwen3-0-6b-instruct
-#     → test qwen3 model: http://qwen3.maas.local:8000
+#   ./test-request-limits.sh --host qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com --model qwen3-0-6b-instruct
+#     → test qwen3 model: http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com
 #
-#   ./test-request-limits.sh -H granite.maas.local -m granite-8b-code-instruct-128k
+#   ./test-request-limits.sh -H granite-llm.apps.summit-gpu.octo-emerging.redhataicoe.com -m granite-8b-code-instruct-128k
 #     → test granite model when available
 ###############################################################################
 
 ########################
 # Defaults & CLI opts
 ########################
-API_HOST="simulator.maas.local"          # default hostname (domain routing)
+API_HOST="simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"          # default hostname (domain routing)
 MODEL_ID="simulator-model"               # default model for simulator
 # MODEL_ID="qwen3-0-6b-instruct"         # alt: qwen3 model
 
@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-BASE_URL="http://${API_HOST}:8000/v1/chat/completions"
+BASE_URL="http://${API_HOST}/v1/chat/completions"
 
 echo "📡  Host    : $API_HOST"
 echo "🤖  Model ID: $MODEL_ID"

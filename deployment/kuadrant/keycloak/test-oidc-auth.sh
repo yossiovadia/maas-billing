@@ -6,7 +6,7 @@
 set -euo pipefail
 
 KEYCLOAK_HOST="${KEYCLOAK_HOST:-localhost:8080}"
-API_HOST="${API_HOST:-simulator.maas.local:8000}"
+API_HOST="${API_HOST:-simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com}"
 REALM="maas"
 CLIENT_ID="maas-client"
 CLIENT_SECRET="maas-client-secret"

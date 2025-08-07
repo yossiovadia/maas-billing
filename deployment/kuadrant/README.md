@@ -141,7 +141,11 @@ kubectl apply --server-side -f https://github.com/kserve/kserve/releases/downloa
 kubectl wait --for=condition=Available deployment/kserve-controller-manager -n kserve --timeout=300s
 
 # Configure KServe for Gateway API integration
-kubectl apply -f 01-kserve-config.yaml
+# For OpenShift clusters:
+kubectl apply -f 01-kserve-config-openshift.yaml
+
+# For local development:
+# kubectl apply -f 01-kserve-config.yaml
 
 # Restart KServe controller to pick up new configuration
 kubectl rollout restart deployment/kserve-controller-manager -n kserve
@@ -161,14 +165,37 @@ kubectl get configmap inferenceservice-config -n kserve \
 
 ### 3. Configure Gateway and Routing
 
-The configuration is pre-configured for domain-based routing. Deploy the Gateway and routing configuration:
+The configuration supports both local development and OpenShift cluster deployments.
 
-```bash START HERE WEDNESDAY
+#### For OpenShift Clusters:
+
+Deploy the Gateway and routing configuration with OpenShift Routes:
+
+```bash
 kubectl apply -f 02-gateway-configuration.yaml
 kubectl apply -f 03-model-routing-domains.yaml
+kubectl apply -f 02a-openshift-routes.yaml
 ```
 
-**Note:** If you want to use a different domain, update the hostnames in the files before applying.
+The manifests are pre-configured for the domain: `apps.summit-gpu.octo-emerging.redhataicoe.com`
+
+**For different OpenShift clusters:** Update the hostnames in `02-gateway-configuration.yaml`, `03-model-routing-domains.yaml`, and `02a-openshift-routes.yaml` to match your cluster's ingress domain.
+
+#### For Local Development (KIND/minikube):
+
+For local clusters, use the original `.maas.local` configuration:
+
+```bash
+# Reset to local development configuration
+sed -i 's/apps\.summit-gpu\.octo-emerging\.redhataicoe\.com/maas.local/g' 02-gateway-configuration.yaml
+sed -i 's/-llm\.apps\.summit-gpu\.octo-emerging\.redhataicoe\.com/.maas.local/g' 03-model-routing-domains.yaml
+
+kubectl apply -f 02-gateway-configuration.yaml  
+kubectl apply -f 03-model-routing-domains.yaml
+
+# Add to /etc/hosts for local testing
+echo "127.0.0.1 simulator.maas.local qwen3.maas.local granite.maas.local mistral.maas.local nomic.maas.local" >> /etc/hosts
+```
 
 ### 4. Install Kuadrant Operator
 
@@ -213,15 +240,93 @@ kubectl wait --for=condition=Available deployment/minio -n minio-system --timeou
 > Option 1 Deploy models using KServe InferenceServices on a GPU accelerator:
 > There is an added example of how to set the runtime with kserve via `vllm-latest-runtime.yaml`
 
+#### 🚨 OpenDataHub/ROSA Cluster Troubleshooting
+
+**If you encounter this error on ROSA/OpenShift clusters with OpenDataHub:**
+
+```
+Error from server (InternalError): error when creating "vllm-simulator-kserve.yaml": 
+Internal error occurred: failed calling webhook "minferenceservice-v1beta1.odh-model-controller.opendatahub.io": 
+failed to call webhook: Post "https://odh-model-controller-webhook-service.redhat-ods-applications.svc:443/mutate-serving-kserve-io-v1beta1-inferenceservice?timeout=10s": 
+service "odh-model-controller-webhook-service" not found
+```
+
+**Root Cause:** OpenDataHub webhook is configured but the service is missing (usually due to missing Service Mesh operator dependency).
+
+**Solution:** Remove the broken webhook and retry:
+
 ```bash
-# Deploy the latest vLLM ServingRuntime with Qwen3 support
+# Remove the problematic OpenDataHub webhook
+kubectl delete mutatingwebhookconfiguration mutating.odh-model-controller.opendatahub.io
+
+# Retry deploying your model
+kubectl apply -f ../model_serving/vllm-simulator-kserve.yaml
+```
+
+This won't affect your KServe deployment since you're using the standard KServe controller, not OpenDataHub's model controller.
+
+#### OpenShift Security Context Constraints
+
+**For OpenShift clusters, deploy Security Context Constraints before deploying models:**
+
+```bash
+# Deploy ServiceAccount and SecurityContextConstraints for OpenShift
+kubectl apply -f 02b-openshift-scc.yaml
+```
+
+This creates:
+- A `kserve-service-account` ServiceAccount in the `llm` namespace
+- A `kserve-scc` SecurityContextConstraints that allows the necessary permissions for model containers
+
+#### Deploy Models
+
+**For OpenShift clusters:**
+
+```bash
+# Deploy the OpenShift-compatible simulator model (without Istio sidecar)
+kubectl apply -f ../model_serving/vllm-simulator-kserve-openshift.yaml
+
+# Deploy the OpenShift-compatible vLLM ServingRuntime with GPU support
+kubectl apply -f ../model_serving/vllm-latest-runtime-openshift.yaml
+
+# Deploy the Qwen3-0.6B model on GPU nodes (requires nvidia.com/gpu.present=true node)
+kubectl apply -f ../model_serving/qwen3-0.6b-vllm-raw-openshift.yaml
+```
+
+> **Note**: The OpenShift manifests disable Istio sidecar injection (`sidecar.istio.io/inject: "false"`) to avoid iptables/networking issues in restrictive OpenShift environments. The GPU model includes proper node selection and tolerations for NVIDIA GPU nodes.
+
+**For local development (KIND/minikube):**
+
+```bash
+# Deploy the standard simulator model  
+kubectl apply -f ../model_serving/vllm-simulator-kserve.yaml
+
+# Deploy other models as needed
 kubectl apply -f ../model_serving/vllm-latest-runtime.yaml
-
-# Deploy the Qwen3-0.6B model (recommended for testing)
 kubectl apply -f ../model_serving/qwen3-0.6b-vllm-raw.yaml
+```
 
+#### Monitor Model Deployment
+
+```bash
 # Monitor InferenceService deployment status
 kubectl get inferenceservice -n llm
+
+# Watch model deployment (GPU models take 5-10 minutes for model download)
+kubectl describe inferenceservice qwen3-0-6b-instruct -n llm
+
+# Check if pods are running (may take 5-15 minutes for model downloads)
+kubectl get pods -n llm -l serving.kserve.io/inferenceservice
+
+# Follow logs to see model loading progress (GPU models)
+kubectl logs -n llm -l serving.kserve.io/inferenceservice=qwen3-0-6b-instruct -c kserve-container -f
+
+# Wait for GPU model to be ready
+kubectl wait --for=condition=Ready inferenceservice qwen3-0-6b-instruct -n llm --timeout=900s
+
+# Check GPU allocation
+kubectl describe node ip-10-0-71-72.ec2.internal | grep -A5 "Allocated resources"
+```
 
 # Watch model deployment (takes 5-10 minutes for model download)
 kubectl describe inferenceservice qwen3-0-6b-instruct -n llm
@@ -260,7 +365,19 @@ kubectl apply -f 07-rate-limit-policies.yaml
 kubectl rollout restart deployment kuadrant-operator-controller-manager -n kuadrant-system
 ```
 
-### 7. Start Port Forwarding for Local Access
+### 7. Access Your Models
+
+#### For OpenShift Clusters:
+
+Your models are directly accessible via the OpenShift Routes (no port-forwarding needed):
+
+- **Simulator**: `http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`
+- **Qwen3**: `http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`  
+- **Granite**: `http://granite-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`
+- **Mistral**: `http://mistral-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`
+- **Nomic**: `http://nomic-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`
+
+#### For Local Development (KIND/minikube):
 
 If running on kind/minikube, you need port forwarding to access the models:
 
@@ -271,13 +388,25 @@ kubectl port-forward -n llm svc/inference-gateway-istio 8000:80 &
 
 ### 8. Test the MaaS API
 
+#### For OpenShift Clusters:
+
 Test all user tiers and rate limits with the automated script:
 
 ```bash
-# Test simulator model (default)
+# Test simulator model (default - uses OpenShift route)
 ./scripts/test-request-limits.sh
 
 # Test qwen3 model when ready
+./scripts/test-request-limits.sh --host qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com --model qwen3-0-6b-instruct
+```
+
+#### For Local Development:
+
+```bash
+# Test simulator model (default - uses port-forward)
+./scripts/test-request-limits.sh --host simulator.maas.local
+
+# Test qwen3 model when ready  
 ./scripts/test-request-limits.sh --host qwen3.maas.local --model qwen3-0-6b-instruct
 ```
 
@@ -321,40 +450,40 @@ Free2 req #7  -> 429
 
 Test individual models with manual curl commands:
 
-**Simulator Model:**
+**Simulator Model (OpenShift):**
 
 ```bash
 # Single request test
 curl -s -H 'Authorization: APIKEY freeuser1_key' \
      -H 'Content-Type: application/json' \
      -d '{"model":"simulator-model","messages":[{"role":"user","content":"Hello!"}]}' \
-     http://simulator.maas.local:8000/v1/chat/completions
+     http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions
 
 # Test rate limiting (Free tier: 5 requests per 2min)
 for i in {1..7}; do
   printf "Free tier request #%-2s -> " "$i"
   curl -s -o /dev/null -w "%{http_code}\n" \
-       -X POST http://simulator.maas.local:8000/v1/chat/completions \
+       -X POST http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions \
        -H 'Authorization: APIKEY freeuser1_key' \
        -H 'Content-Type: application/json' \
        -d '{"model":"simulator-model","messages":[{"role":"user","content":"Test request"}],"max_tokens":10}'
 done
 ```
 
-**Qwen3 Model:**
+**Qwen3 Model (OpenShift):**
 
 ```bash
 # Single request test
 curl -s -H 'Authorization: APIKEY premiumuser1_key' \
      -H 'Content-Type: application/json' \
      -d '{"model":"qwen3-0-6b-instruct","messages":[{"role":"user","content":"Hello!"}]}' \
-     http://qwen3.maas.local:8000/v1/chat/completions
+     http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions
 
 # Test rate limiting (Premium tier: 20 requests per 2min)
 for i in {1..22}; do
   printf "Premium tier request #%-2s -> " "$i"
   curl -s -o /dev/null -w "%{http_code}\n" \
-       -X POST http://qwen3.maas.local:8000/v1/chat/completions \
+       -X POST http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions \
        -H 'Authorization: APIKEY premiumuser1_key' \
        -H 'Content-Type: application/json' \
        -d '{"model":"qwen3-0-6b-instruct","messages":[{"role":"user","content":"Test request"}],"max_tokens":10}'

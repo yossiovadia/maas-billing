@@ -14,7 +14,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "qwen3.maas.local"
+    - "qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
@@ -38,7 +38,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "simulator.maas.local"
+    - "simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
@@ -62,7 +62,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "granite.maas.local"
+    - "granite-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
@@ -86,7 +86,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "mistral.maas.local"
+    - "mistral-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
@@ -110,7 +110,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "nomic.maas.local"
+    - "nomic-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
