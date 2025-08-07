@@ -13,7 +13,7 @@ export interface Model {
 
 export interface PolicyItem {
   id: string;
-  type: 'team' | 'model';
+  type: 'tier' | 'model';
   value: string;
   isApprove: boolean; // true for approve policy, false for reject policy
 }

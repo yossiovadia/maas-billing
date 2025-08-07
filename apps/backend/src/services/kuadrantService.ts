@@ -104,7 +104,7 @@ class KuadrantService {
           if (group) {
             items.push({
               id: `auth-item-${index}`,
-              type: 'team',
+              type: 'tier',
               value: group,
               isApprove: true
             });
@@ -116,7 +116,7 @@ class KuadrantService {
     return {
       id: `authpolicy-${metadata.name}`,
       name: metadata.name,
-      description: `API key authentication for ${items.length > 0 ? items.map(i => i.value).join(', ') : 'all'} teams`,
+      description: `API key authentication for ${items.length > 0 ? items.map(i => i.value).join(', ') : 'all'} tiers`,
       type: 'auth',
       namespace: metadata.namespace,
       targetRef: spec.targetRef,
@@ -169,7 +169,7 @@ class KuadrantService {
         policies.push({
           id: `ratelimitpolicy-${metadata.name}-${groupName}`,
           name: `${limitName}`,
-          description: `Rate limiting for ${groupName} team`,
+          description: `Rate limiting for ${groupName} tier`,
           type: 'rateLimit',
           namespace: metadata.namespace,
           targetRef: spec.targetRef,
@@ -189,7 +189,7 @@ class KuadrantService {
           isActive: this.isPolicyActive(status),
           items: [{
             id: `rate-limit-item-${index}`,
-            type: 'team',
+            type: 'tier',
             value: groupName,
             isApprove: true
           }],

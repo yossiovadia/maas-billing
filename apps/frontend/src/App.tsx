@@ -2,8 +2,13 @@ import React, { useState } from 'react';
 import {
   AppBar,
   Box,
+  Drawer,
   IconButton,
+  List,
+  ListItem,
+  ListItemButton,
   ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
   Toolbar,
@@ -25,6 +30,8 @@ import PolicyManager from './components/PolicyManager';
 import MetricsDashboard from './components/MetricsDashboard';
 import RequestSimulator from './components/RequestSimulator';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+
+const drawerWidth = 240;
 
 function AppContent() {
   const [selectedView, setSelectedView] = useState('policies');
@@ -72,50 +79,24 @@ function AppContent() {
           }}
         >
           <Toolbar sx={{ minHeight: '64px !important' }}>
-            {/* Red Hat Logo and Title */}
-            <Box sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
-              <Box
-                component="img"
-                src="/redhat-fedora-logo.png"
-                alt="Red Hat"
-                sx={{ height: 40, mr: 2 }}
-              />
-              <Typography variant="h6" component="div" sx={{ color: 'white', fontWeight: 600 }}>
-                MaaS
-              </Typography>
-              <Typography variant="body2" component="div" sx={{ color: '#999', ml: 1 }}>
-                Inference Model as a Service
-              </Typography>
-            </Box>
+            {/* Logo and Title */}
+            <Box
+              component="img"
+              src="/redhat-fedora-logo.png"
+              alt="Red Hat"
+              sx={{ height: 32, mr: 2 }}
+            />
+            <Typography variant="h6" component="div" sx={{ color: 'white', mr: 2 }}>
+              |
+            </Typography>
+            <Typography variant="h6" component="div" sx={{ color: 'white', fontWeight: 600 }}>
+              MaaS
+            </Typography>
+            <Typography variant="body2" component="div" sx={{ color: '#999', ml: 1 }}>
+              Inference Model as a Service
+            </Typography>
             
             <Box sx={{ flexGrow: 1 }} />
-            
-            {/* Navigation Tabs */}
-            <Box sx={{ display: 'flex', mr: 3 }}>
-              {menuItems.map((item) => (
-                <Box
-                  key={item.id}
-                  onClick={() => setSelectedView(item.id)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    px: 2,
-                    py: 1,
-                    mr: 2,
-                    cursor: 'pointer',
-                    color: selectedView === item.id ? '#fff' : '#999',
-                    borderBottom: selectedView === item.id ? '2px solid #ee0000' : 'none',
-                    '&:hover': {
-                      color: '#fff',
-                    },
-                  }}
-                >
-                  {item.icon}
-                  <Typography variant="body2">{item.label}</Typography>
-                </Box>
-              ))}
-            </Box>
             
             {/* Theme Toggle */}
             <IconButton
@@ -183,6 +164,60 @@ function AppContent() {
           </Toolbar>
         </AppBar>
 
+        {/* Sidebar Drawer */}
+        <Drawer
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: drawerWidth,
+              boxSizing: 'border-box',
+              backgroundColor: '#1a1a1a',
+              borderRight: '1px solid #333',
+            },
+          }}
+          variant="permanent"
+          anchor="left"
+        >
+          {/* Navigation List */}
+          <List sx={{ mt: 8 }}>
+            {menuItems.map((item) => (
+              <ListItem key={item.id} disablePadding>
+                <ListItemButton
+                  selected={selectedView === item.id}
+                  onClick={() => setSelectedView(item.id)}
+                  sx={{
+                    mx: 1,
+                    mb: 0.5,
+                    borderRadius: 1,
+                    '&.Mui-selected': {
+                      backgroundColor: '#ee0000',
+                      '&:hover': {
+                        backgroundColor: '#cc0000',
+                      },
+                    },
+                    '&:hover': {
+                      backgroundColor: '#333',
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ color: selectedView === item.id ? 'white' : '#999' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={item.label}
+                    sx={{ 
+                      '& .MuiListItemText-primary': {
+                        color: selectedView === item.id ? 'white' : '#999',
+                        fontWeight: selectedView === item.id ? 600 : 400,
+                      }
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Drawer>
 
         {/* Main content */}
         <Box
@@ -190,12 +225,11 @@ function AppContent() {
           sx={{
             flexGrow: 1,
             bgcolor: 'background.default',
-            pt: '80px', // Account for header only
-            px: 3,
-            pb: 3,
-            width: '100%',
+            p: 3,
+            width: `calc(100% - ${drawerWidth}px)`,
           }}
         >
+          <Toolbar />
           {renderContent()}
         </Box>
       </Box>

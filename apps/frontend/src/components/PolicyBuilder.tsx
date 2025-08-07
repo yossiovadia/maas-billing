@@ -151,7 +151,7 @@ const PolicyBuilder: React.FC<PolicyBuilderProps> = ({
     }));
   };
 
-  const addPolicyItem = (type: 'team' | 'model', value: string, isApprove: boolean) => {
+  const addPolicyItem = (type: 'tier' | 'model', value: string, isApprove: boolean) => {
     const newItem: PolicyItem = {
       id: `item-${Date.now()}`,
       type,
@@ -210,7 +210,6 @@ const PolicyBuilder: React.FC<PolicyBuilderProps> = ({
     onSave(policyToSave);
   };
 
-  const getTeamName = (teamId: string) => teams.find(t => t.id === teamId)?.name || teamId;
   const getModelName = (modelId: string) => models.find(m => m.id === modelId)?.name || modelId;
 
   return (
@@ -269,7 +268,7 @@ const PolicyBuilder: React.FC<PolicyBuilderProps> = ({
           
           <Box sx={{ mb: 2 }}>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              Add teams and models to this policy. Green items are approved, red items are denied.
+              Add tiers and models to this policy. Green items are approved, red items are denied.
             </Typography>
           </Box>
 
@@ -277,19 +276,19 @@ const PolicyBuilder: React.FC<PolicyBuilderProps> = ({
           <Grid container spacing={1} sx={{ mb: 2 }}>
             <Grid item>
               <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>Add Team</InputLabel>
+                <InputLabel>Add Tier</InputLabel>
                 <Select
-                  label="Add Team"
+                  label="Add Tier"
                   value=""
                   onChange={(e) => {
                     if (e.target.value) {
-                      addPolicyItem('team', e.target.value, true);
+                      addPolicyItem('tier', e.target.value, true);
                     }
                   }}
                 >
-                  {teams.map(team => (
-                    <MenuItem key={team.id} value={team.id}>
-                      {team.name}
+                  {['free', 'premium', 'enterprise'].map(tier => (
+                    <MenuItem key={tier} value={tier}>
+                      {tier.charAt(0).toUpperCase() + tier.slice(1)}
                     </MenuItem>
                   ))}
                 </Select>
@@ -344,7 +343,7 @@ const PolicyBuilder: React.FC<PolicyBuilderProps> = ({
                         }}
                       >
                         <Chip
-                          label={`${item.type === 'team' ? getTeamName(item.value) : getModelName(item.value)}`}
+                          label={`${item.type === 'tier' ? item.value.charAt(0).toUpperCase() + item.value.slice(1) : getModelName(item.value)}`}
                           color={item.isApprove ? 'success' : 'error'}
                           variant={item.isApprove ? 'filled' : 'outlined'}
                         />

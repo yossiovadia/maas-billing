@@ -21,7 +21,7 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   Schedule as ScheduleIcon,
-  Group as GroupIcon,
+  Stars as TierIcon,
   Memory as ModelIcon,
   Security as AuthIcon,
   Speed as RateLimitIcon,
@@ -101,17 +101,17 @@ const PolicyManager: React.FC = () => {
     }
   };
 
-  const getTeamColor = (teamName: string) => {
-    // Define distinct colors for each team
-    const teamColors: { [key: string]: string } = {
+  const getTierColor = (tierName: string) => {
+    // Define distinct colors for each tier
+    const tierColors: { [key: string]: string } = {
       'free': '#4caf50',        // Green
       'premium': '#ff9800',     // Orange
       'enterprise': '#9c27b0',  // Purple
-      'admin': '#f44336',       // Red
-      'developer': '#2196f3',   // Blue
-      'analyst': '#795548',     // Brown
+      'basic': '#2196f3',       // Blue
+      'pro': '#f44336',         // Red
+      'ultimate': '#795548',    // Brown
     };
-    return teamColors[teamName.toLowerCase()] || '#666';
+    return tierColors[tierName.toLowerCase()] || '#666';
   };
 
   const formatTimeRange = (policy: Policy) => {
@@ -185,7 +185,7 @@ const PolicyManager: React.FC = () => {
             <TableRow>
               <TableCell>Policy</TableCell>
               <TableCell>Description</TableCell>
-              <TableCell>Teams & Models</TableCell>
+              <TableCell>Tiers & Models</TableCell>
               <TableCell>Request Limits</TableCell>
               <TableCell>Time Range</TableCell>
               <TableCell>Status</TableCell>
@@ -222,12 +222,12 @@ const PolicyManager: React.FC = () => {
                       <Chip
                         key={item.id}
                         size="small"
-                        icon={item.type === 'team' ? <GroupIcon /> : <ModelIcon />}
+                        icon={item.type === 'tier' ? <TierIcon /> : <ModelIcon />}
                         label={item.value}
                         variant="filled"
                         sx={{
-                          ...(item.type === 'team' && {
-                            backgroundColor: getTeamColor(item.value),
+                          ...(item.type === 'tier' && {
+                            backgroundColor: getTierColor(item.value),
                             color: 'white',
                             fontWeight: 'bold',
                             '& .MuiChip-icon': {

@@ -43,8 +43,8 @@ export const initialPolicies: Policy[] = [
     items: [
       {
         id: 'item-1',
-        type: 'team',
-        value: 'engineering',
+        type: 'tier',
+        value: 'premium',
         isApprove: true
       }
     ],
@@ -70,14 +70,14 @@ export const initialPolicies: Policy[] = [
     items: [
       {
         id: 'item-2',
-        type: 'team',
-        value: 'product',
+        type: 'tier',
+        value: 'free',
         isApprove: true
       },
       {
         id: 'item-3',
-        type: 'team',
-        value: 'marketing',
+        type: 'tier',
+        value: 'enterprise',
         isApprove: true
       }
     ],
