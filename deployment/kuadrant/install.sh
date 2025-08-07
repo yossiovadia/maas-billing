@@ -18,6 +18,7 @@ NAMESPACE="llm"
 MODEL_TYPE=""
 DEPLOY_KIND=false
 SKIP_METRICS=false
+OCP=false
 
 usage() {
   cat <<EOF
@@ -29,12 +30,13 @@ Options
   --install-all-models   Deploy both simulator and Qwen3
   --deploy-kind           Create a kind cluster named llm-maas and deploy the simulator model
   --skip-metrics         Skip Prometheus observability deployment
-
+  --ocp                  Deploy to OpenShift cluster
 Examples
   $0 --simulator
   $0 --qwen3 --skip-metrics
   $0 --install-all-models
   $0 --deploy-kind
+  $0 --simulator --ocp
 EOF
   exit 1
 }
@@ -48,6 +50,7 @@ while [[ $# -gt 0 ]]; do
     --deploy-kind)         DEPLOY_KIND=true; MODEL_TYPE="simulator" ; shift ;;
     --skip-metrics)        SKIP_METRICS=true ; shift ;;
     -h|--help)             usage ;;
+    --ocp)                 OCP=true ; shift ;;
     *) echo "❌ Unknown option: $1"; usage ;;
   esac
 done
@@ -93,11 +96,19 @@ kubectl wait --for=condition=Available deployment/cert-manager            -n cer
 kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=300s
 kubectl wait --for=condition=Available deployment/cert-manager-webhook   -n cert-manager --timeout=300s
 
-echo "🔧 Installing KServe"
-kubectl apply --server-side -f https://github.com/kserve/kserve/releases/download/v0.15.2/kserve.yaml
+if [[ "$OCP" == true ]]; then
+  echo "🔧 Installing Openshift Serverless"
+  kubectl apply --server-side -f https://raw.githubusercontent.com/kserve/kserve/refs/heads/master/docs/openshift/serverless/operator.yaml
 
-echo "⏳   Waiting for KServe controller"
-kubectl wait --for=condition=Available deployment/kserve-controller-manager -n kserve --timeout=300s
+  echo "⏳   Waiting for Openshift Serverless controller"
+  kubectl wait --for=condition=ready pod --all -n openshift-serverless --timeout=300s
+else
+  echo "🔧 Installing KServe"
+  kubectl apply --server-side -f https://github.com/kserve/kserve/releases/download/v0.15.2/kserve.yaml
+
+  echo "⏳   Waiting for KServe controller"
+  kubectl wait --for=condition=Available deployment/kserve-controller-manager -n kserve --timeout=300s
+fi
 
 echo "🔧 Configuring KServe for Gateway API"
 kubectl apply -f 01-kserve-config.yaml
@@ -117,19 +128,26 @@ if [[ -x ./setup-local-domains.sh ]]; then
 fi
 
 # ────────────────────────────── 5. Kuadrant Operator ─────────────────────────
-echo "🔧 5. Installing Kuadrant operator"
-helm repo add kuadrant https://kuadrant.io/helm-charts
-helm repo update
+if [[ "$OCP" == true ]]; then
+  echo "🔧 Installing Openshift Connectivity Link operator"
+  kubectl apply -k kustomize/connectivitylink/
 
-helm install kuadrant-operator kuadrant/kuadrant-operator \
-  --create-namespace \
-  --namespace kuadrant-system
+  echo "⏳   Waiting for Connectivity Link operator"
+  kubectl wait --for=condition=Available deployment/rhcl-operator -n kuadrant-system --timeout=300s
+else
+  echo "🔧 5. Installing Kuadrant operator"
+  helm repo add kuadrant https://kuadrant.io/helm-charts
+  helm repo update
 
-kubectl apply -f 04-kuadrant-operator.yaml
+  helm install kuadrant-operator kuadrant/kuadrant-operator \
+    --create-namespace \
+    --namespace kuadrant-system
 
-echo "⏳   Waiting for Kuadrant operator"
-kubectl wait --for=condition=Available deployment/kuadrant-operator-controller-manager -n kuadrant-system --timeout=300s
+  kubectl apply -f 04-kuadrant-operator.yaml
 
+  echo "⏳   Waiting for Kuadrant operator"
+  kubectl wait --for=condition=Available deployment/kuadrant-operator-controller-manager -n kuadrant-system --timeout=300s
+fi
 # ────────────────────────────── 6. Model deployment ──────────────────────────
 echo "🔧 6. Deploying model(s)"
 
