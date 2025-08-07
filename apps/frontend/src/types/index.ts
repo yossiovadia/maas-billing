@@ -33,8 +33,14 @@ export interface Policy {
   id: string;
   name: string;
   description: string;
-  type: 'auth' | 'rateLimit';
-  config: {
+  items: PolicyItem[];
+  requestLimits: RequestLimits;
+  timeRange: TimeRange;
+  created: string;
+  modified: string;
+  // Kuadrant-specific properties
+  type?: 'auth' | 'rateLimit';
+  config?: {
     auth?: {
       type: string;
       required: boolean;
@@ -45,15 +51,9 @@ export interface Policy {
       unit: string;
     };
   };
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  // Legacy properties for compatibility with mock data
-  items?: PolicyItem[];
-  requestLimits?: RequestLimits;
-  timeRange?: TimeRange;
-  created?: string;
-  modified?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Request {

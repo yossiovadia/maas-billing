@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { logger } from './utils/logger';
 import metricsRoutes from './routes/metrics';
+import policiesRoutes from './routes/policies';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +35,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/v1/metrics', metricsRoutes);
+app.use('/api/v1/policies', policiesRoutes);
 
 // Models endpoint for compatibility
 app.get('/api/v1/models', (req, res) => {
@@ -83,6 +85,10 @@ if (require.main === module) {
     logger.info('  GET /api/v1/metrics - General metrics');
     logger.info('  GET /api/v1/metrics/live-requests - Live request data with policy enforcement');
     logger.info('  GET /api/v1/metrics/dashboard - Dashboard statistics');
+    logger.info('  GET /api/v1/policies - Get all policies');
+    logger.info('  POST /api/v1/policies - Create new policy');
+    logger.info('  PUT /api/v1/policies/:id - Update policy');
+    logger.info('  DELETE /api/v1/policies/:id - Delete policy');
   });
 }
 

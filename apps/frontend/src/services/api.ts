@@ -34,6 +34,31 @@ class ApiService {
   async getMetrics(timeRange: string = '1h') {
     return this.fetch(`/metrics?timeRange=${timeRange}`);
   }
+
+  async getPolicies() {
+    return this.fetch('/policies');
+  }
+
+  async createPolicy(policy: any) {
+    return this.fetch('/policies', {
+      method: 'POST',
+      body: JSON.stringify(policy),
+    });
+  }
+
+  async updatePolicy(id: string, policy: any) {
+    return this.fetch(`/policies/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(policy),
+    });
+  }
+
+  async deletePolicy(id: string) {
+    return this.fetch(`/policies/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
-export default new ApiService();
+const apiService = new ApiService();
+export default apiService;

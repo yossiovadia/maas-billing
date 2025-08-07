@@ -37,10 +37,10 @@ export const useLiveRequests = (autoRefresh: boolean = true) => {
       const data = await apiService.getLiveRequests();
       setRequests(prev => {
         // Create a Map to track unique requests by ID
-        const existingIds = new Set(prev.map(req => req.id));
+        const existingIds = new Set(prev.map((req: any) => req.id));
         
         // Only add new requests that don't already exist
-        const newRequests = data.filter(req => !existingIds.has(req.id));
+        const newRequests = data.filter((req: any) => !existingIds.has(req.id));
         
         // Prepend new requests and keep last 100
         return [...newRequests, ...prev].slice(0, 100);
