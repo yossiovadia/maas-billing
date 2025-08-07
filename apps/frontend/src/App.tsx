@@ -76,9 +76,9 @@ function AppContent() {
             <Box sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
               <Box
                 component="img"
-                src="/redhat-logo.svg"
+                src="/redhat-fedora-logo.png"
                 alt="Red Hat"
-                sx={{ height: 32, mr: 2 }}
+                sx={{ height: 40, mr: 2 }}
               />
               <Typography variant="h6" component="div" sx={{ color: 'white', fontWeight: 600 }}>
                 MaaS
