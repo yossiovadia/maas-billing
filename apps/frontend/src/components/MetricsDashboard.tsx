@@ -52,7 +52,7 @@ const MetricsDashboard: React.FC = () => {
       case 'None':
         return { color: 'success' as const, icon: <AcceptIcon /> };
       default:
-        return { color: 'default' as const, icon: null };
+        return { color: 'default' as const, icon: undefined };
     }
   };
 

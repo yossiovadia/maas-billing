@@ -34,12 +34,12 @@ export interface Policy {
   name: string;
   description: string;
   items: PolicyItem[];
-  requestLimits: RequestLimits;
+  requestLimits?: RequestLimits;
   timeRange: TimeRange;
   created: string;
   modified: string;
   // Kuadrant-specific properties
-  type?: 'auth' | 'rateLimit';
+  type: 'auth' | 'rateLimit';
   config?: {
     auth?: {
       type: string;

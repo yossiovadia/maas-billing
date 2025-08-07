@@ -2,15 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Fab,
-  Grid,
   IconButton,
   TextField,
   Typography,
@@ -31,10 +23,11 @@ import {
   Schedule as ScheduleIcon,
   Group as GroupIcon,
   Memory as ModelIcon,
+  Security as AuthIcon,
+  Speed as RateLimitIcon,
 } from '@mui/icons-material';
 
-import { Policy, Team, Model } from '../types';
-import { teams, models } from '../data/mockData';
+import { Policy } from '../types';
 import PolicyBuilder from './PolicyBuilder';
 import apiService from '../services/api';
 
@@ -108,19 +101,17 @@ const PolicyManager: React.FC = () => {
     }
   };
 
-  const getTeamName = (teamId: string) => {
-    const team = teams.find(t => t.id === teamId);
-    return team?.name || teamId;
-  };
-
-  const getTeamColor = (teamId: string) => {
-    const team = teams.find(t => t.id === teamId);
-    return team?.color || '#666';
-  };
-
-  const getModelName = (modelId: string) => {
-    const model = models.find(m => m.id === modelId);
-    return model?.name || modelId;
+  const getTeamColor = (teamName: string) => {
+    // Define distinct colors for each team
+    const teamColors: { [key: string]: string } = {
+      'free': '#4caf50',        // Green
+      'premium': '#ff9800',     // Orange
+      'enterprise': '#9c27b0',  // Purple
+      'admin': '#f44336',       // Red
+      'developer': '#2196f3',   // Blue
+      'analyst': '#795548',     // Brown
+    };
+    return teamColors[teamName.toLowerCase()] || '#666';
   };
 
   const formatTimeRange = (policy: Policy) => {
@@ -131,10 +122,21 @@ const PolicyManager: React.FC = () => {
   };
 
   const formatRequestLimits = (policy: Policy) => {
+    if (!policy.requestLimits) {
+      return null; // Don't show anything for auth policies
+    }
     if (policy.requestLimits.tokenLimit === null) {
       return 'Unlimited';
     }
-    return `${policy.requestLimits.tokenLimit.toLocaleString()} tokens/${policy.requestLimits.timePeriod}`;
+    return `${policy.requestLimits.tokenLimit.toLocaleString()} requests/${policy.requestLimits.timePeriod}`;
+  };
+
+  const getPolicyTypeIcon = (type: string) => {
+    return type === 'auth' ? <AuthIcon /> : <RateLimitIcon />;
+  };
+
+  const getPolicyTypeColor = (type: string) => {
+    return type === 'auth' ? 'primary' : 'secondary';
   };
 
   if (loading) {
@@ -181,7 +183,7 @@ const PolicyManager: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
+              <TableCell>Policy</TableCell>
               <TableCell>Description</TableCell>
               <TableCell>Teams & Models</TableCell>
               <TableCell>Request Limits</TableCell>
@@ -194,9 +196,20 @@ const PolicyManager: React.FC = () => {
             {filteredPolicies.map((policy) => (
               <TableRow key={policy.id} hover>
                 <TableCell>
-                  <Typography variant="subtitle2" fontWeight="bold">
-                    {policy.name}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                      icon={getPolicyTypeIcon(policy.type)}
+                      label={policy.type === 'auth' ? 'Auth' : 'Rate Limit'}
+                      color={getPolicyTypeColor(policy.type) as any}
+                      size="small"
+                      variant="outlined"
+                    />
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight="bold">
+                        {policy.name}
+                      </Typography>
+                    </Box>
+                  </Box>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" color="text.secondary">
@@ -210,17 +223,16 @@ const PolicyManager: React.FC = () => {
                         key={item.id}
                         size="small"
                         icon={item.type === 'team' ? <GroupIcon /> : <ModelIcon />}
-                        label={
-                          item.type === 'team' 
-                            ? getTeamName(item.value)
-                            : getModelName(item.value)
-                        }
-                        color={item.isApprove ? 'success' : 'error'}
-                        variant={item.isApprove ? 'filled' : 'outlined'}
+                        label={item.value}
+                        variant="filled"
                         sx={{
                           ...(item.type === 'team' && {
-                            backgroundColor: item.isApprove ? getTeamColor(item.value) : 'transparent',
-                            borderColor: getTeamColor(item.value),
+                            backgroundColor: getTeamColor(item.value),
+                            color: 'white',
+                            fontWeight: 'bold',
+                            '& .MuiChip-icon': {
+                              color: 'white'
+                            }
                           })
                         }}
                       />
@@ -228,9 +240,15 @@ const PolicyManager: React.FC = () => {
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2">
-                    {formatRequestLimits(policy)}
-                  </Typography>
+                  {formatRequestLimits(policy) ? (
+                    <Typography variant="body2">
+                      {formatRequestLimits(policy)}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                      N/A (Auth only)
+                    </Typography>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -305,8 +323,8 @@ const PolicyManager: React.FC = () => {
       <PolicyBuilder
         open={isBuilderOpen}
         policy={selectedPolicy}
-        teams={teams}
-        models={models}
+        teams={[]}
+        models={[]}
         onSave={handleSavePolicy}
         onClose={() => {
           setIsBuilderOpen(false);

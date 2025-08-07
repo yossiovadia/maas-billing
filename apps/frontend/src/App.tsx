@@ -2,22 +2,13 @@ import React, { useState } from 'react';
 import {
   AppBar,
   Box,
-  CssBaseline,
-  Drawer,
   IconButton,
-  List,
-  ListItem,
-  ListItemButton,
   ListItemIcon,
-  ListItemText,
   Menu,
   MenuItem,
   Toolbar,
   Typography,
   Avatar,
-  useTheme,
-  ThemeProvider,
-  createTheme,
 } from '@mui/material';
 import {
   Policy as PolicyIcon,
@@ -26,31 +17,19 @@ import {
   AccountCircle,
   Settings,
   Logout,
+  LightMode,
+  DarkMode,
 } from '@mui/icons-material';
 
 import PolicyManager from './components/PolicyManager';
 import MetricsDashboard from './components/MetricsDashboard';
 import RequestSimulator from './components/RequestSimulator';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 
-const drawerWidth = 240;
-
-// Create dark theme similar to original
-const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#ee0000', // Red Hat red
-    },
-    background: {
-      default: '#1a1a1a',
-      paper: '#2d2d2d',
-    },
-  },
-});
-
-function App() {
+function AppContent() {
   const [selectedView, setSelectedView] = useState('policies');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const { mode, toggleTheme } = useTheme();
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -80,22 +59,72 @@ function App() {
   ];
 
   return (
-    <ThemeProvider theme={darkTheme}>
-      <Box sx={{ display: 'flex' }}>
-        <CssBaseline />
+    <Box sx={{ display: 'flex' }}>
         
         {/* App Bar */}
         <AppBar
           position="fixed"
           sx={{
-            width: `calc(100% - ${drawerWidth}px)`,
-            ml: `${drawerWidth}px`,
+            width: '100%',
+            zIndex: (theme) => theme.zIndex.drawer + 1,
+            backgroundColor: '#151515',
+            borderBottom: '1px solid #333',
           }}
         >
-          <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              MaaS - Models as a Service
-            </Typography>
+          <Toolbar sx={{ minHeight: '64px !important' }}>
+            {/* Red Hat Logo and Title */}
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
+              <Box
+                component="img"
+                src="/redhat-logo.svg"
+                alt="Red Hat"
+                sx={{ height: 32, mr: 2 }}
+              />
+              <Typography variant="h6" component="div" sx={{ color: 'white', fontWeight: 600 }}>
+                MaaS
+              </Typography>
+              <Typography variant="body2" component="div" sx={{ color: '#999', ml: 1 }}>
+                Inference Model as a Service
+              </Typography>
+            </Box>
+            
+            <Box sx={{ flexGrow: 1 }} />
+            
+            {/* Navigation Tabs */}
+            <Box sx={{ display: 'flex', mr: 3 }}>
+              {menuItems.map((item) => (
+                <Box
+                  key={item.id}
+                  onClick={() => setSelectedView(item.id)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    px: 2,
+                    py: 1,
+                    mr: 2,
+                    cursor: 'pointer',
+                    color: selectedView === item.id ? '#fff' : '#999',
+                    borderBottom: selectedView === item.id ? '2px solid #ee0000' : 'none',
+                    '&:hover': {
+                      color: '#fff',
+                    },
+                  }}
+                >
+                  {item.icon}
+                  <Typography variant="body2">{item.label}</Typography>
+                </Box>
+              ))}
+            </Box>
+            
+            {/* Theme Toggle */}
+            <IconButton
+              color="inherit"
+              onClick={toggleTheme}
+              sx={{ mr: 2 }}
+            >
+              {mode === 'dark' ? <LightMode /> : <DarkMode />}
+            </IconButton>
             
             <div>
               <IconButton
@@ -131,6 +160,12 @@ function App() {
                   </ListItemIcon>
                   Profile
                 </MenuItem>
+                <MenuItem onClick={() => { toggleTheme(); handleClose(); }}>
+                  <ListItemIcon>
+                    {mode === 'dark' ? <LightMode fontSize="small" /> : <DarkMode fontSize="small" />}
+                  </ListItemIcon>
+                  Switch to {mode === 'dark' ? 'Light' : 'Dark'} Mode
+                </MenuItem>
                 <MenuItem onClick={handleClose}>
                   <ListItemIcon>
                     <Settings fontSize="small" />
@@ -148,47 +183,6 @@ function App() {
           </Toolbar>
         </AppBar>
 
-        {/* Drawer */}
-        <Drawer
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': {
-              width: drawerWidth,
-              boxSizing: 'border-box',
-            },
-          }}
-          variant="permanent"
-          anchor="left"
-        >
-          <Toolbar>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box
-                component="img"
-                sx={{ height: 32, width: 32 }}
-                alt="Red Hat Logo"
-                src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMDAgMzAwIj48cGF0aCBkPSJNMTUwIDI3MEMyMjguMjQgMjcwIDI5MCAyMDguMjQgMjkwIDEzMFM2OS43NiAyOS43NiAwIDEwMGMwIDcwLjI0IDU5Ljc2IDEzMCAxMzAgMTMwczEzMCA1OS43NiAxMzAgMTMweiIgZmlsbD0iI2VlMDAwMCIvPjwvc3ZnPg=="
-              />
-              <Typography variant="h6" component="div" color="primary.main">
-                Red Hat
-              </Typography>
-            </Box>
-          </Toolbar>
-
-          <List>
-            {menuItems.map((item) => (
-              <ListItem key={item.id} disablePadding>
-                <ListItemButton
-                  selected={selectedView === item.id}
-                  onClick={() => setSelectedView(item.id)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        </Drawer>
 
         {/* Main content */}
         <Box
@@ -196,14 +190,22 @@ function App() {
           sx={{
             flexGrow: 1,
             bgcolor: 'background.default',
-            p: 3,
-            width: `calc(100% - ${drawerWidth}px)`,
+            pt: '80px', // Account for header only
+            px: 3,
+            pb: 3,
+            width: '100%',
           }}
         >
-          <Toolbar />
           {renderContent()}
         </Box>
       </Box>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
     </ThemeProvider>
   );
 }

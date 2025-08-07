@@ -203,6 +203,7 @@ const PolicyBuilder: React.FC<PolicyBuilderProps> = ({
       timeRange: formData.timeRange!,
       created: policy?.created || new Date().toISOString(),
       modified: new Date().toISOString(),
+      type: policy?.type || 'auth', // Default to auth type
       isActive: formData.isActive,
     };
 
