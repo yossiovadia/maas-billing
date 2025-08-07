@@ -50,7 +50,7 @@ const MetricsDashboard: React.FC = () => {
       case 'RateLimitPolicy':
         return { color: 'warning' as const, icon: <RateLimitIcon /> };
       case 'None':
-        return { color: 'success' as const, icon: <CheckCircle /> };
+        return { color: 'success' as const, icon: <AcceptIcon /> };
       default:
         return { color: 'default' as const, icon: null };
     }
