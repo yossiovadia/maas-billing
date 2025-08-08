@@ -1,0 +1,10 @@
+# Enable access logging for Istio gateway in llm namespace
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: gateway-access-logs
+  namespace: llm
+spec:
+  accessLogging:
+  - providers:
+    - name: envoy
