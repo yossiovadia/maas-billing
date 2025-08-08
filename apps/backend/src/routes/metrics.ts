@@ -107,30 +107,74 @@ router.get('/policy-stats', async (req, res) => {
   }
 });
 
-// Get dashboard statistics
+// Get dashboard statistics from real Prometheus metrics
 router.get('/dashboard', async (req, res) => {
   try {
-    const status = await metricsService.getMetricsStatus();
-    const requests = await metricsService.getRealLiveRequests();
-    
-    const totalRequests = requests.length;
-    const acceptedRequests = requests.filter(r => r.decision === 'accept').length;
-    const rejectedRequests = requests.filter(r => r.decision === 'reject').length;
-    const policyEnforcedRequests = requests.filter(r => r.policyType && r.policyType !== 'None').length;
+    // Get real data from Prometheus sources
+    const [istioMetrics, authorinoMetrics, status] = await Promise.all([
+      metricsService.fetchIstioMetrics(),
+      metricsService.fetchAuthorinoMetrics(),
+      metricsService.getMetricsStatus()
+    ]);
 
+    // Calculate totals from real Prometheus data
+    let totalRequests = 0;
+    let acceptedRequests = 0;
+    let authFailedRequests = 0;
+    let rateLimitedRequests = 0;
+    let rejectedRequests = 0;
+
+    if (istioMetrics) {
+      // Use real Istio metrics for accurate counts
+      acceptedRequests = istioMetrics.successRequests || 0;
+      authFailedRequests = istioMetrics.authFailedRequests || 0;
+      rateLimitedRequests = istioMetrics.rateLimitedRequests || 0;
+      rejectedRequests = authFailedRequests + rateLimitedRequests + (istioMetrics.notFoundRequests || 0);
+      totalRequests = acceptedRequests + rejectedRequests;
+    }
+
+    // Enhanced status with real metrics sources
+    const enhancedStatus = {
+      ...status,
+      istioConnected: istioMetrics !== null,
+      metricsSource: istioMetrics ? 'istio-prometheus' : 'fallback',
+      realData: totalRequests > 0
+    };
+    
     res.json({
       success: true,
       data: {
+        // Real metrics from Prometheus
         totalRequests,
         acceptedRequests,
         rejectedRequests,
-        policyEnforcedRequests,
-        kuadrantStatus: {
-          limitadorConnected: status.limitadorConnected,
-          authorinoConnected: status.authorinoConnected,
-          hasRealTraffic: status.hasRealTraffic
+        authFailedRequests,
+        rateLimitedRequests,
+        policyEnforcedRequests: authFailedRequests + rateLimitedRequests,
+        
+        // Enhanced status
+        kuadrantStatus: enhancedStatus,
+        
+        // Real Authorino controller metrics from Prometheus
+        authorinoStats: authorinoMetrics ? {
+          authConfigs: Array.from(authorinoMetrics.authByNamespace?.keys() || []).length,
+          totalEvaluations: authorinoMetrics.authRequests || 0,
+          successfulReconciles: authorinoMetrics.authSuccesses || 0,
+          failedReconciles: authorinoMetrics.authFailures || 0,
+          // Additional controller metrics
+          reconcileOperations: authorinoMetrics.totalReconciles || 0,
+          avgReconcileTime: authorinoMetrics.avgReconcileTime || 0
+        } : {
+          authConfigs: 0,
+          totalEvaluations: 0,
+          successfulReconciles: 0,
+          failedReconciles: 0,
+          reconcileOperations: 0,
+          avgReconcileTime: 0
         },
-        lastUpdate: status.lastUpdate
+        
+        lastUpdate: new Date().toISOString(),
+        source: 'prometheus-metrics'
       }
     });
   } catch (error) {

@@ -55,7 +55,7 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 
-import { useLiveRequests } from '../hooks/useApi';
+import { useLiveRequests, useDashboardStats } from '../hooks/useApi';
 import { Request } from '../types';
 
 // Expandable row component
@@ -436,7 +436,8 @@ const RequestRow: React.FC<{ request: Request }> = ({ request }) => {
 };
 
 const MetricsDashboard: React.FC = () => {
-  const { requests, loading, error } = useLiveRequests(true);
+  const { requests, loading: requestsLoading, error: requestsError } = useLiveRequests(true);
+  const { stats, loading: statsLoading, error: statsError } = useDashboardStats();
   const [filterByDecision, setFilterByDecision] = useState<'all' | 'accept' | 'reject'>('all');
   const [filterByPolicy, setFilterByPolicy] = useState<'all' | 'AuthPolicy' | 'RateLimitPolicy' | 'None'>('all');
   const [filterBySource, setFilterBySource] = useState<'all' | 'limitador' | 'authorino' | 'envoy' | 'kuadrant' | 'kserve'>('all');
@@ -456,7 +457,7 @@ const MetricsDashboard: React.FC = () => {
     return decisionMatch && policyMatch && sourceMatch && searchMatch;
   });
 
-  if (loading) {
+  if (requestsLoading || statsLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
@@ -465,30 +466,58 @@ const MetricsDashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (requestsError || statsError) {
     return (
       <Alert severity="error" sx={{ mb: 2 }}>
         <Typography variant="h6">Error Loading Metrics</Typography>
-        <Typography variant="body2">{error}</Typography>
+        <Typography variant="body2">{requestsError || statsError}</Typography>
       </Alert>
     );
   }
 
-  const totalRequests = filteredRequests.length;
-  const acceptedRequests = filteredRequests.filter(r => r.decision === 'accept').length;
-  const rejectedRequests = filteredRequests.filter(r => r.decision === 'reject').length;
-  const policyEnforcedRequests = filteredRequests.filter(r => r.policyType && r.policyType !== 'None').length;
-  const totalTokens = filteredRequests.reduce((sum, r) => sum + (r.modelInference?.totalTokens || r.tokens || 0), 0);
-  const avgResponseTime = filteredRequests.filter(r => r.totalResponseTime).reduce((sum, r) => sum + (r.totalResponseTime || 0), 0) / Math.max(1, filteredRequests.filter(r => r.totalResponseTime).length);
-  const totalCost = filteredRequests.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
-  const successfulInferences = filteredRequests.filter(r => r.modelInference).length;
+  // Use real Prometheus metrics from dashboard API for top-level stats
+  const {
+    totalRequests = 0,
+    acceptedRequests = 0, 
+    rejectedRequests = 0,
+    authFailedRequests = 0,
+    rateLimitedRequests = 0,
+    policyEnforcedRequests = 0,
+    kuadrantStatus = {},
+    authorinoStats = null,
+    source = 'unknown'
+  } = stats || {};
+
+  // Extract real Authorino controller metrics (only what's available from Prometheus)
+  const authConfigsManaged = authorinoStats?.authConfigs || 0;
+  const authConfigReconciles = authorinoStats?.reconcileOperations || 0;
+  
+  // No more calculated metrics - only real Prometheus data
 
   return (
     <Box>
       {/* Header */}
-      <Typography variant="h4" component="h1" gutterBottom>
-        Live Request Metrics
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4" component="h1">
+          Live Request Metrics
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Data Source:
+          </Typography>
+          <Chip 
+            label={source === 'prometheus-metrics' ? 'Real Prometheus' : 'Fallback'}
+            color={source === 'prometheus-metrics' ? 'success' : 'warning'} 
+            size="small"
+          />
+          {kuadrantStatus?.istioConnected && (
+            <Chip label="Istio ✓" color="success" size="small" />
+          )}
+          {kuadrantStatus?.authorinoConnected && (
+            <Chip label="Authorino ✓" color="success" size="small" />
+          )}
+        </Box>
+      </Box>
       
       {/* Filters */}
       <Toolbar sx={{ px: 0, mb: 2, flexWrap: 'wrap', gap: 2 }}>
@@ -548,8 +577,8 @@ const MetricsDashboard: React.FC = () => {
         </FormControl>
       </Toolbar>
 
-      {/* Summary Stats */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      {/* First Row - Basic Stats */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
@@ -569,9 +598,9 @@ const MetricsDashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AcceptIcon sx={{ mr: 1 }} />
+                <AcceptIcon sx={{ mr: 1, color: 'success.main' }} />
                 <Typography color="text.secondary" gutterBottom>
-                  Accepted
+                  Requests Approved
                 </Typography>
               </Box>
               <Typography variant="h4" component="div" color="success.main">
@@ -587,9 +616,9 @@ const MetricsDashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <RejectIcon sx={{ mr: 1 }} />
+                <RejectIcon sx={{ mr: 1, color: 'error.main' }} />
                 <Typography color="text.secondary" gutterBottom>
-                  Rejected
+                  Requests Rejected
                 </Typography>
               </Box>
               <Typography variant="h4" component="div" color="error.main">
@@ -605,16 +634,53 @@ const MetricsDashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <AcceptIcon sx={{ mr: 1, color: 'success.main' }} />
+                <Typography color="text.secondary" gutterBottom>
+                  Success Rate
+                </Typography>
+              </Box>
+              <Typography variant="h4" component="div" color="success.main">
+                {totalRequests > 0 ? `${((acceptedRequests / totalRequests) * 100).toFixed(1)}%` : 'N/A'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Requests approved
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Second Row - Policy Breakdown */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <PolicyIcon sx={{ mr: 1 }} />
                 <Typography color="text.secondary" gutterBottom>
-                  Policy Enforced
+                  Authentication
                 </Typography>
               </Box>
-              <Typography variant="h4" component="div" color="primary.main">
-                {policyEnforcedRequests}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {totalRequests > 0 ? `${((policyEnforcedRequests / totalRequests) * 100).toFixed(1)}%` : '0%'}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h5" component="div" color="error.main">
+                    {authFailedRequests}
+                  </Typography>
+                  <Typography variant="body2" color="error.main">
+                    Blocked
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h5" component="div" color="success.main">
+                    {totalRequests - authFailedRequests}
+                  </Typography>
+                  <Typography variant="body2" color="success.main">
+                    Passed
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Auth success: {totalRequests > 0 ? `${(((totalRequests - authFailedRequests) / totalRequests) * 100).toFixed(1)}%` : '0%'}
               </Typography>
             </CardContent>
           </Card>
@@ -623,74 +689,38 @@ const MetricsDashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TokenIcon sx={{ mr: 1 }} />
+                <RateLimitIcon sx={{ mr: 1 }} />
                 <Typography color="text.secondary" gutterBottom>
-                  Total Tokens
+                  Rate Limiting
                 </Typography>
               </Box>
-              <Typography variant="h4" component="div">
-                {totalTokens.toLocaleString()}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {successfulInferences} successful inferences
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h5" component="div" color="error.main">
+                    {rateLimitedRequests}
+                  </Typography>
+                  <Typography variant="body2" color="error.main">
+                    Blocked
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h5" component="div" color="success.main">
+                    {(totalRequests - authFailedRequests) - rateLimitedRequests}
+                  </Typography>
+                  <Typography variant="body2" color="success.main">
+                    Passed
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Rate success: {(totalRequests - authFailedRequests) > 0 ? `${((((totalRequests - authFailedRequests) - rateLimitedRequests) / (totalRequests - authFailedRequests)) * 100).toFixed(1)}%` : '0%'}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <TimerIcon sx={{ mr: 1 }} />
-                <Typography color="text.secondary" gutterBottom>
-                  Avg Response Time
-                </Typography>
-              </Box>
-              <Typography variant="h4" component="div">
-                {avgResponseTime > 0 ? `${Math.round(avgResponseTime)}ms` : 'N/A'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                End-to-end latency
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <CostIcon sx={{ mr: 1 }} />
-                <Typography color="text.secondary" gutterBottom>
-                  Total Cost
-                </Typography>
-              </Box>
-              <Typography variant="h4" component="div">
-                ${totalCost.toFixed(4)}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Estimated billing
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ModelIcon sx={{ mr: 1 }} />
-                <Typography color="text.secondary" gutterBottom>
-                  Model Inferences
-                </Typography>
-              </Box>
-              <Typography variant="h4" component="div">
-                {successfulInferences}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Completed successfully
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+        {/* Empty spaces for consistent layout */}
+        <Grid item xs={12} sm={6} md={3}></Grid>
+        <Grid item xs={12} sm={6} md={3}></Grid>
       </Grid>
 
       {/* Requests Table */}
@@ -728,25 +758,33 @@ const MetricsDashboard: React.FC = () => {
       </TableContainer>
 
       {/* Real-time indicator */}
-      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              bgcolor: 'success.main',
-              mr: 1,
-              animation: 'pulse 2s infinite',
-              '@keyframes pulse': {
-                '0%': { opacity: 1 },
-                '50%': { opacity: 0.5 },
-                '100%': { opacity: 1 },
-              },
-            }}
-          />
+      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: 'success.main',
+                mr: 1,
+                animation: 'pulse 2s infinite',
+                '@keyframes pulse': {
+                  '0%': { opacity: 1 },
+                  '50%': { opacity: 0.5 },
+                  '100%': { opacity: 1 },
+                },
+              }}
+            />
+            <Typography variant="body2" color="text.secondary">
+              Live updates every 2s
+            </Typography>
+          </Box>
           <Typography variant="body2" color="text.secondary">
-            Live updates every 2 seconds
+            • Dashboard: Real Prometheus metrics
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • Table: Real Envoy access logs
           </Typography>
         </Box>
         <Typography variant="body2" color="text.secondary">

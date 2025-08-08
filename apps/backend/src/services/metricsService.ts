@@ -663,7 +663,12 @@ export class MetricsService {
       authByPolicy: new Map(),
       authByMethod: new Map(),
       responseTimes: [] as any[],
-      authDetails: [] as any[]
+      authDetails: [] as any[],
+      // Real controller metrics
+      totalReconciles: 0,
+      successfulReconciles: 0,
+      failedReconciles: 0,
+      avgReconcileTime: 0
     };
 
     for (const line of lines) {
@@ -744,6 +749,25 @@ export class MetricsService {
           if (labels.evaluator_name) {
             const currentCount = metrics.authByPolicy.get(labels.evaluator_name) || 0;
             metrics.authByPolicy.set(labels.evaluator_name, currentCount + value);
+          }
+        }
+      }
+      
+      // Parse real controller reconcile metrics
+      if (line.includes('controller_runtime_reconcile_total{')) {
+        const match = line.match(/controller_runtime_reconcile_total{controller="([^"]+)",result="([^"]+)"}\s+(\d+(?:\.\d+)?)/);
+        if (match) {
+          const controller = match[1];
+          const result = match[2];
+          const value = parseFloat(match[3]);
+          
+          if (controller === 'authconfig') {
+            metrics.totalReconciles += value;
+            if (result === 'success') {
+              metrics.successfulReconciles += value;
+            } else if (result === 'error') {
+              metrics.failedReconciles += value;
+            }
           }
         }
       }
