@@ -153,6 +153,17 @@ export interface Request {
   policyType?: 'AuthPolicy' | 'RateLimitPolicy' | 'None';
   reason?: string;
   tokens?: number;
+  
+  // Raw log data from Envoy access logs
+  rawLogData?: {
+    responseCode: number;
+    flags: string;
+    route: string;
+    bytesReceived: number;
+    bytesSent: number;
+    host: string;
+    upstreamHost: string;
+  };
 }
 
 export interface SimulationRequest {

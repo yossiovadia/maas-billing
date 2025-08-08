@@ -49,7 +49,7 @@ import {
   Timer as TimerIcon,
   Token as TokenIcon,
   AttachMoney as CostIcon,
-  Computer as ModelIcon,
+  SmartToy as ModelIcon,
   Group as TeamIcon,
   Http as EndpointIcon,
   Search as SearchIcon,
@@ -57,6 +57,16 @@ import {
 
 import { useLiveRequests, useDashboardStats } from '../hooks/useApi';
 import { Request } from '../types';
+
+// Helper function to format duration in ms with k notation for large values
+const formatDuration = (milliseconds: number): string => {
+  if (milliseconds >= 1000) {
+    const k = (milliseconds / 1000).toFixed(1);
+    return k.endsWith('.0') ? `${Math.floor(milliseconds / 1000)}kms` : `${k}kms`;
+  }
+  
+  return `${milliseconds}ms`;
+};
 
 // Expandable row component
 const RequestRow: React.FC<{ request: Request }> = ({ request }) => {
@@ -155,12 +165,27 @@ const RequestRow: React.FC<{ request: Request }> = ({ request }) => {
           </Box>
         </TableCell>
         <TableCell align="right">
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
-            <TokenIcon fontSize="small" />
-            <Typography variant="body2">
-              {request.modelInference?.totalTokens || request.tokens || 0}
+          <Typography variant="body2">
+            {request.totalResponseTime ? formatDuration(request.totalResponseTime) : '-'}
+          </Typography>
+        </TableCell>
+        <TableCell align="right">
+          {request.modelInference ? (
+            <Tooltip title={`Token breakdown: ${request.modelInference.inputTokens} prompt tokens + ${request.modelInference.outputTokens} completion tokens = ${request.modelInference.totalTokens} total tokens`}>
+              <Box sx={{ textAlign: 'right', cursor: 'help' }}>
+                <Typography variant="body2" component="span">
+                  {request.modelInference.inputTokens} + {request.modelInference.outputTokens} = 
+                </Typography>
+                <Typography variant="body2" component="span" fontWeight="bold" sx={{ ml: 0.5 }}>
+                  {request.modelInference.totalTokens}
+                </Typography>
+              </Box>
+            </Tooltip>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              -
             </Typography>
-          </Box>
+          )}
         </TableCell>
         <TableCell>
           <Tooltip title="View detailed information">
@@ -171,7 +196,7 @@ const RequestRow: React.FC<{ request: Request }> = ({ request }) => {
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={10}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ margin: 1 }}>
               <Typography variant="h6" gutterBottom component="div">
@@ -267,7 +292,7 @@ const RequestRow: React.FC<{ request: Request }> = ({ request }) => {
                 )}
 
                 {/* Policy Decisions */}
-                <Grid item xs={12}>
+                <Grid item xs={12} md={6}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle2" gutterBottom>
@@ -299,6 +324,122 @@ const RequestRow: React.FC<{ request: Request }> = ({ request }) => {
                     </CardContent>
                   </Card>
                 </Grid>
+
+                {/* Raw Log Data */}
+                {request.rawLogData && (
+                  <Grid item xs={12} md={6}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <InfoIcon fontSize="small" />
+                          Raw Envoy Log Data
+                        </Typography>
+                        <List dense>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="primary.main">
+                                  Response Code
+                                </Typography>
+                              }
+                              secondary={
+                                <Chip 
+                                  label={request.rawLogData.responseCode}
+                                  color={request.rawLogData.responseCode === 200 ? 'success' : 'error'}
+                                  size="small"
+                                />
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="info.main">
+                                  Flags
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', backgroundColor: 'grey.100', px: 1, borderRadius: 1 }}>
+                                  {request.rawLogData.flags || '-'}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="secondary.main">
+                                  Route
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', backgroundColor: 'grey.100', px: 1, borderRadius: 1 }}>
+                                  {request.rawLogData.route || '-'}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="warning.main">
+                                  Bytes Received
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2">
+                                  {request.rawLogData.bytesReceived} bytes
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="warning.main">
+                                  Bytes Sent
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2">
+                                  {request.rawLogData.bytesSent} bytes
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="success.main">
+                                  Host
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', backgroundColor: 'success.50', px: 1, borderRadius: 1 }}>
+                                  {request.rawLogData.host || '-'}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                          <ListItem>
+                            <ListItemText 
+                              primary={
+                                <Typography variant="body2" fontWeight="medium" color="success.main">
+                                  Upstream Host
+                                </Typography>
+                              }
+                              secondary={
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', backgroundColor: 'success.50', px: 1, borderRadius: 1 }}>
+                                  {request.rawLogData.upstreamHost || '-'}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                        </List>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
               </Grid>
             </Box>
           </Collapse>
@@ -730,19 +871,43 @@ const MetricsDashboard: React.FC = () => {
             <TableRow>
               <TableCell />
               <TableCell>Timestamp</TableCell>
-              <TableCell>Team</TableCell>
-              <TableCell>Model</TableCell>
+              <TableCell>
+                <Box>
+                  <Typography variant="body2" fontWeight="medium">Tier</Typography>
+                  <Typography variant="caption" color="warning.main" sx={{ fontSize: '0.65rem' }}>
+                    (mock data)
+                  </Typography>
+                </Box>
+              </TableCell>
+              <TableCell>
+                <Box>
+                  <Typography variant="body2" fontWeight="medium">Model</Typography>
+                  <Typography variant="caption" color="warning.main" sx={{ fontSize: '0.65rem' }}>
+                    (mock data)
+                  </Typography>
+                </Box>
+              </TableCell>
               <TableCell>Endpoint</TableCell>
               <TableCell>Decision</TableCell>
               <TableCell>Policies</TableCell>
-              <TableCell align="right">Tokens</TableCell>
+              <TableCell align="right">Duration (ms)</TableCell>
+              <TableCell align="right">
+                <Tooltip title="Token usage format: prompt + completion = total (mock data for now)">
+                  <Box>
+                    <Typography variant="body2" fontWeight="medium">Tokens</Typography>
+                    <Typography variant="caption" color="warning.main" sx={{ fontSize: '0.65rem' }}>
+                      (mock data)
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              </TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredRequests.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
                     No requests found with current filters
                   </Typography>
