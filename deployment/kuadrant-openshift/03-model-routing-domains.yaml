@@ -1,7 +1,7 @@
 # Domain-based Model Routing - Each model gets its own subdomain
 # Use with /etc/hosts entries for local testing
 ---
-# HTTPRoute for Qwen3 Model - qwen3.maas.local
+# HTTPRoute for Qwen3 Model
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -14,7 +14,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "qwen3.maas.local"
+    - "qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
@@ -25,7 +25,7 @@ spec:
           port: 80
           weight: 100
 ---
-# HTTPRoute for Simulator - simulator.maas.local
+# HTTPRoute for Simulator
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -38,7 +38,7 @@ spec:
     - name: inference-gateway
       namespace: llm
   hostnames:
-    - "simulator.maas.local"
+    - "simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com"
   rules:
     - matches:
         - path:
