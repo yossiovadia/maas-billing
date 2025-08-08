@@ -2,13 +2,11 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: authorino-runtime
+  namespace: kuadrant-system
   labels:
     environment: base
     project: models-aas-observability
 spec:
-  namespaceSelector:
-    matchNames:
-      - kuadrant-system
   selector:
     matchLabels:
       authorino-resource: authorino
@@ -27,13 +25,11 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: limitador-runtime
+  namespace: kuadrant-system
   labels:
     environment: base
     project: models-aas-observability
 spec:
-  namespaceSelector:
-    matchNames:
-      - kuadrant-system
   selector:
     matchLabels:
       app: limitador
