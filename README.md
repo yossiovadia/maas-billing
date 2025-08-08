@@ -33,8 +33,8 @@ A comprehensive platform for **Models as a Service** with real-time policy manag
 
 ## 🚀 Quick Start
 
-**For deploying Kuadrant on OpenShift, see → [deployment/kuadrant-openshift](deployment/kuadrant-openshift)**
-**For manual deployment steps of Kuadrant on Vanilla Kube, see → [deployment/kuadrant-openshift](deployment/kuadrant)**
+- **For deploying Kuadrant on OpenShift, see → [deployment/kuadrant-openshift](deployment/kuadrant-openshift)**
+- **For manual deployment steps of Kuadrant on Vanilla Kube, see → [deployment/kuadrant-openshift](deployment/kuadrant)**
 
 ### 1. Deploy Kuadrant Infrastructure (Dev on vanilla kubernetes)
 

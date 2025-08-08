@@ -432,29 +432,20 @@ done
 
 ### 9. Deploy Observability
 
-Deploy Prometheus and monitoring components:
+Deploy ServiceMonitors to integrate with OpenShift's existing Prometheus monitoring:
 
 ```bash
-# Install Prometheus Operator
-kubectl apply --server-side --field-manager=quickstart-installer -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/master/bundle.yaml
-
-# Wait for Prometheus Operator to be ready
-kubectl wait --for=condition=Available deployment/prometheus-operator -n default --timeout=300s
-
-# From models-aas/deployment/kuadrant Kuadrant prometheus observability
+# Deploy ServiceMonitors for Kuadrant components (no additional Prometheus needed)
 kubectl apply -k kustomize/prometheus/
 
-# Wait for Prometheus to be ready
-kubectl wait --for=condition=Running prometheus/models-aas-observability -n llm-observability --timeout=300s
+# Verify ServiceMonitors are created
+kubectl get servicemonitor -n kuadrant-system
 
-# Port-forward to access Prometheus UI
-kubectl port-forward -n llm-observability svc/models-aas-observability 9090:9090 &
-
-# Forward Limitador admin metric scrape target
-kubectl -n kuadrant-system port-forward svc/limitador-limitador 8080:8080
-
-# Access Prometheus at http://localhost:9090
+# Access Grafana Dashboard via OpenShift Route
+# Grafana: https://grafana-route-llm-d-observability.apps.summit-gpu.octo-emerging.redhataicoe.com
 ```
+
+**Note:** This deployment uses OpenShift's built-in user workload monitoring instead of deploying a separate Prometheus instance.
 
 ### Query the Limitador Scrape Endpoint
 
@@ -472,51 +463,34 @@ authorized_calls{limitador_namespace="llm/simulator-domain-route"} 100
 limited_calls{limitador_namespace="llm/simulator-domain-route"} 16
 ```
 
-### Query Metrics via Prom API
+### Query Metrics via Prometheus
 
+**Option 1: Query via OpenShift User Workload Monitoring Prometheus:**
 ```bash
-# Get limited_calls via Prometheus
-curl -sG --data-urlencode 'query=limited_calls'     http://localhost:9090/api/v1/query | jq '.data.result'
-[
-  {
-    "metric": {
-      "__name__": "limited_calls",
-      "container": "limitador",
-      "endpoint": "http",
-      "instance": "10.244.0.19:8080",
-      "job": "limitador-limitador",
-      "limitador_namespace": "llm/simulator-domain-route",
-      "namespace": "kuadrant-system",
-      "pod": "limitador-limitador-84bdfb4747-n8h44",
-      "service": "limitador-limitador"
-    },
-    "value": [
-      1754366303.129,
-      "16"
-    ]
-  }
-]
+# Query limited_calls via OpenShift Prometheus
+oc exec -n openshift-user-workload-monitoring prometheus-user-workload-0 -c prometheus -- \
+  curl -s 'http://localhost:9090/api/v1/query' --data-urlencode 'query=limited_calls' | jq '.data.result'
 
-curl -sG --data-urlencode 'query=authorized_calls'     http://localhost:9090/api/v1/query | jq '.data.result'
-[
-  {
-    "metric": {
-      "__name__": "authorized_calls",
-      "container": "limitador",
-      "endpoint": "http",
-      "instance": "10.244.0.19:8080",
-      "job": "limitador-limitador",
-      "limitador_namespace": "llm/simulator-domain-route",
-      "namespace": "kuadrant-system",
-      "pod": "limitador-limitador-84bdfb4747-n8h44",
-      "service": "limitador-limitador"
-    },
-    "value": [
-      1754366383.534,
-      "100"
-    ]
-  }
-]
+# Query authorized_calls via OpenShift Prometheus  
+oc exec -n openshift-user-workload-monitoring prometheus-user-workload-0 -c prometheus -- \
+  curl -s 'http://localhost:9090/api/v1/query' --data-urlencode 'query=authorized_calls' | jq '.data.result'
+```
+
+**Option 2: Query metrics directly from Limitador pod:**
+```bash
+# Query metrics directly from Limitador pod
+oc exec -n kuadrant-system deployment/limitador-limitador -- curl -s localhost:8080/metrics | grep calls
+
+# Example output:
+# HELP limited_calls Limited calls
+# TYPE limited_calls counter
+limited_calls{limitador_namespace="llm/simulator-domain-route"} 3
+limited_calls{limitador_namespace="llm/qwen3-domain-route"} 6
+
+# HELP authorized_calls Authorized calls
+# TYPE authorized_calls counter
+authorized_calls{limitador_namespace="llm/qwen3-domain-route"} 27
+authorized_calls{limitador_namespace="llm/simulator-domain-route"} 16
 ```
 
 ## Troubleshooting
