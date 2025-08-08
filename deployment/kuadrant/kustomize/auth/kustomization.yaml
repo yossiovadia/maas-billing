@@ -13,6 +13,7 @@ resources:
   - ../../05-api-key-secrets.yaml
   - ../../06-auth-policies-apikey.yaml
   - ../../07-rate-limit-policies.yaml
+  - ../../08-authorino-metrics-patch.yaml
 
 commonLabels:
   app.kubernetes.io/name: maas-platform
