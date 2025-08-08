@@ -4,8 +4,8 @@ import { logger } from './utils/logger';
 import metricsRoutes from './routes/metrics';
 import policiesRoutes from './routes/policies';
 
-const app = express();
-const PORT = process.env.PORT || 3001;
+const app: express.Application = express();
+const PORT = process.env.PORT || 3002;
 
 // Middleware
 app.use(cors({
