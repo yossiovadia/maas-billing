@@ -69,14 +69,13 @@ export const useLiveRequests = (autoRefresh: boolean = true) => {
   return { requests, loading, error, refetch: fetchLiveRequests };
 };
 
-export const useDashboardStats = () => {
+export const useDashboardStats = (autoRefresh: boolean = true) => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
     try {
-      setLoading(true);
       setError(null);
       const data = await apiService.getDashboardStats();
       setStats(data);
@@ -90,6 +89,16 @@ export const useDashboardStats = () => {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 5000); // Refresh every 5 seconds for dashboard stats
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchStats]);
 
   return { stats, loading, error, refetch: fetchStats };
 };

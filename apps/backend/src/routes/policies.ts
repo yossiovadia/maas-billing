@@ -2,7 +2,7 @@ import express from 'express';
 import { logger } from '../utils/logger';
 import { kuadrantService } from '../services/kuadrantService';
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 // Get all policies from Kuadrant
 router.get('/', async (req, res) => {
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
       data: policies,
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to fetch policies:', error);
     res.status(500).json({
       success: false,
@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
       success: true,
       data: newPolicy
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to create policy:', error);
     res.status(500).json({
       success: false,
@@ -73,7 +73,7 @@ router.put('/:id', async (req, res) => {
       success: true,
       data: updatedPolicy
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to update policy:', error);
     res.status(500).json({
       success: false,
@@ -94,7 +94,7 @@ router.delete('/:id', async (req, res) => {
       success: true,
       message: `Policy ${policyId} deleted successfully`
     });
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to delete policy:', error);
     res.status(500).json({
       success: false,
