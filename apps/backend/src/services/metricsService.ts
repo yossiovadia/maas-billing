@@ -112,7 +112,7 @@ export interface RealMetricsRequest {
 }
 
 export class MetricsService {
-  private limitadorUrl = 'http://localhost:8081';
+  private limitadorUrl = 'http://localhost:8082';
   private authorinoUrl = 'http://localhost:8084'; // Controller metrics with deep metrics enabled
   private istioUrl = 'http://localhost:15000'; // Envoy/Istio gateway metrics
   private recentRequests: RealMetricsRequest[] = [];
@@ -615,12 +615,14 @@ export class MetricsService {
 
   async fetchIstioMetrics(): Promise<any> {
     try {
+      logger.info(`Fetching Istio metrics from: ${this.istioUrl}/stats/prometheus`);
       const response = await axios.get(`${this.istioUrl}/stats/prometheus`, {
         timeout: 5000
       });
+      logger.info(`Istio metrics response size: ${response.data.length} characters`);
       return this.parseIstioMetrics(response.data);
     } catch (error) {
-      logger.warn('Failed to fetch Istio metrics:', error);
+      logger.error('Failed to fetch Istio metrics:', error);
       return null;
     }
   }
@@ -651,7 +653,7 @@ export class MetricsService {
     };
 
     for (const line of lines) {
-      if (line.includes('istio_requests_total{') && line.includes('vllm-simulator-predictor')) {
+      if (line.includes('istio_requests_total{') && line.includes('source_workload="inference-gateway-istio"')) {
         const match = line.match(/istio_requests_total\{([^}]+)\}\s+(\d+(?:\.\d+)?)/);
         if (match) {
           const labelsStr = match[1];
@@ -678,6 +680,7 @@ export class MetricsService {
                 break;
               case '404':
                 metrics.notFoundRequests += value;
+                logger.info(`Found 404 request with value: ${value}`);
                 break;
             }
             
@@ -687,7 +690,7 @@ export class MetricsService {
       }
     }
 
-    logger.info(`Istio Prometheus metrics: ${metrics.totalRequests} total (${metrics.successRequests} success, ${metrics.authFailedRequests} auth failed, ${metrics.rateLimitedRequests} rate limited)`);
+    logger.info(`Istio Prometheus metrics: ${metrics.totalRequests} total (${metrics.successRequests} success, ${metrics.authFailedRequests} auth failed, ${metrics.rateLimitedRequests} rate limited, ${metrics.notFoundRequests} not found)`);
     
     return metrics;
   }

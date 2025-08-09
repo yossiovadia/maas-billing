@@ -152,8 +152,18 @@ router.get('/dashboard', async (req, res) => {
         rateLimitedRequests,
         policyEnforcedRequests: authFailedRequests + rateLimitedRequests,
         
-        // Enhanced status
-        kuadrantStatus: enhancedStatus,
+        // Enhanced status  
+        kuadrantStatus: {
+          ...enhancedStatus,
+          notFoundRequests: istioMetrics?.notFoundRequests || 0,
+          debugIstioMetrics: istioMetrics ? {
+            successRequests: istioMetrics.successRequests,
+            authFailedRequests: istioMetrics.authFailedRequests,
+            rateLimitedRequests: istioMetrics.rateLimitedRequests,
+            notFoundRequests: istioMetrics.notFoundRequests,
+            totalRequests: istioMetrics.totalRequests
+          } : null
+        },
         
         // Real Authorino controller metrics from Prometheus
         authorinoStats: authorinoMetrics ? {
