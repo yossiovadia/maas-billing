@@ -33,12 +33,15 @@ A comprehensive platform for **Models as a Service** with real-time policy manag
 
 ## 🚀 Quick Start
 
-### 1. Deploy Kuadrant Infrastructure
+- **For deploying Kuadrant on OpenShift, see → [deployment/kuadrant-openshift](deployment/kuadrant-openshift)**
+- **For manual deployment steps of Kuadrant on Vanilla Kube, see → [deployment/kuadrant-openshift](deployment/kuadrant)**
+
+### 1. Deploy Kuadrant Infrastructure (Dev on vanilla kubernetes)
 
 First, deploy the Kuadrant infrastructure that provides the policy enforcement engine:
 
 ```bash
-git clone https://github.com/noyitz/maas-billing.git
+git clone https://github.com/redhat-et/maas-billing.git
 cd maas-billing/deployment/kuadrant
 
 # Set up local domains (adds entries to /etc/hosts)

@@ -1,11 +1,11 @@
 # Models as a Service with Kuadrant
 
-This repository demonstrates how to deploy a Models-as-a-Service platform using Kuadrant. Kuadrant provides cloud-native API gateway capabilities using Istio and the Gateway API.
+This repository demonstrates how to deploy a Models-as-a-Service platform using Kuadrant on Openshift. Kuadrant provides cloud-native API gateway capabilities using Istio and the Gateway API.
 
 ## Architecture Overview
 
 **Gateway:** API Gateway + Istio/Envoy with Kuadrant policies integrated
-**Models:** KServe InferenceServices (Qwen, Simulator)
+**Models:** KServe InferenceServices (Included Qwen, Simulator)
 **Authentication:** API Keys (simple) or Keycloak (Red Hat SSO)
 **Rate Limiting:** Kuadrant RateLimitPolicy
 **Observability:** Prometheus + Kuadrant Scrapes (for Kuadrant chargeback WIP see [Question on mapping authorized_calls metrics to a user](https://github.com/Kuadrant/limitador/issues/434))
@@ -48,8 +48,7 @@ This repository demonstrates how to deploy a Models-as-a-Service platform using 
 
 - Kubernetes cluster with admin access
 - kubectl configured
-- For KIND clusters: `kind create cluster --name llm-maas`
-- For minikube with GPU: `minikube start --driver docker --container-runtime docker --gpus all --memory no-limit --cpus no-limit`
+- Running OpenShift cluster
 - Kustomize
 
 ## 🚀 Quick Start (Automated Installer)
@@ -58,14 +57,14 @@ This repository demonstrates how to deploy a Models-as-a-Service platform using 
 
 ```bash
 cd ~/rhmaas/models-aas/deployment/kuadrant
-./install.sh --simulator
+./install.sh --simulator -ocp
 ```
 
 **For GPU clusters:**
 
 ```bash
 cd ~/rhmaas/models-aas/deployment/kuadrant  
-./install.sh --qwen3
+./install.sh --qwen3 -ocp
 ```
 
 **More Examples**
@@ -77,6 +76,7 @@ cd deployment/kuadrant
 ./install.sh --qwen3                # For GPU clusters with real AI models
 ./install.sh --install-all-models   # For deploying both the qwen (on a GPU) and Sim
 ./install.sh --deploy-kind          # Deploy a Kind cluster with a model simulator
+./install.sh --ocp                  # deploy on OCP
 ```
 
 The installer will:
@@ -86,19 +86,15 @@ The installer will:
 - ✅ Set up tiered API keys (Free/Premium/Enterprise)
 - ✅ Show you the port-forward and test commands
 
-**After installation, run the port-forward command shown to access your API!**
+**After installation, run the port-forward command shown to access your API**
 
 ---
-
-## Manual Deployment (Advanced)
-
-Follow the manual deployment steps below for full understanding and control over your MaaS deployment.
 
 ## Manual Deployment Instructions
 
 ```shell
-git clone https://github.com/redhat-et/maas-billing.git 
-cd deployment/kuadrant
+git clone https://github.com/redhat-et/maas-billing.git
+cd deployment/kuadrant-openshift
 ```
 
 ### 1. Install Istio and Gateway API
@@ -141,7 +137,11 @@ kubectl apply --server-side -f https://github.com/kserve/kserve/releases/downloa
 kubectl wait --for=condition=Available deployment/kserve-controller-manager -n kserve --timeout=300s
 
 # Configure KServe for Gateway API integration
-kubectl apply -f 01-kserve-config.yaml
+# For OpenShift clusters:
+kubectl apply -f 01-kserve-config-openshift.yaml
+
+# For local development:
+# kubectl apply -f 01-kserve-config.yaml
 
 # Restart KServe controller to pick up new configuration
 kubectl rollout restart deployment/kserve-controller-manager -n kserve
@@ -152,18 +152,29 @@ kubectl get configmap inferenceservice-config -n kserve -o yaml
 
 kubectl get configmap inferenceservice-config -n kserve \
   -o jsonpath='{.data.deploy}{"\n"}{.data.ingress}{"\n"}'
+
+# Output
+# {"defaultDeploymentMode": "RawDeployment"}
+# {"enableGatewayApi": true, "kserveIngressGateway": "inference-gateway.llm"}
 ```
 
 ### 3. Configure Gateway and Routing
 
-The configuration is pre-configured for domain-based routing. Deploy the Gateway and routing configuration:
+The configuration supports OpenShift cluster deployments.
+
+#### For OpenShift Clusters:
+
+Deploy the Gateway and routing configuration with OpenShift Routes:
 
 ```bash
 kubectl apply -f 02-gateway-configuration.yaml
 kubectl apply -f 03-model-routing-domains.yaml
+kubectl apply -f 02a-openshift-routes.yaml
 ```
 
-**Note:** If you want to use a different domain, update the hostnames in the files before applying.
+The manifests are pre-configured for the domain: `apps.summit-gpu.octo-emerging.redhataicoe.com`
+
+**For different OpenShift clusters:** Update the hostnames in `02-gateway-configuration.yaml`, `03-model-routing-domains.yaml`, and `02a-openshift-routes.yaml` to match your cluster's ingress domain.
 
 ### 4. Install Kuadrant Operator
 
@@ -186,20 +197,87 @@ kubectl wait --for=condition=Available deployment/kuadrant-operator-controller-m
 kubectl rollout restart deployment kuadrant-operator-controller-manager -n kuadrant-system
 ```
 
-### 5. Deploy AI Models with KServe
+### 7. Deploy AI Models with KServe
 
 > Option 1 Deploy models using KServe InferenceServices on a GPU accelerator:
 > There is an added example of how to set the runtime with kserve via `vllm-latest-runtime.yaml`
 
+#### 🚨 OpenDataHub/ROSA Cluster Troubleshooting
+
+**If you encounter this error on ROSA/OpenShift clusters with OpenDataHub:**
+
+```
+Error from server (InternalError): error when creating "vllm-simulator-kserve.yaml": 
+Internal error occurred: failed calling webhook "minferenceservice-v1beta1.odh-model-controller.opendatahub.io": 
+failed to call webhook: Post "https://odh-model-controller-webhook-service.redhat-ods-applications.svc:443/mutate-serving-kserve-io-v1beta1-inferenceservice?timeout=10s": 
+service "odh-model-controller-webhook-service" not found
+```
+
+**Root Cause:** OpenDataHub webhook is configured but the service is missing (usually due to missing Service Mesh operator dependency).
+
+**Solution:** Remove the broken webhook and retry:
+
 ```bash
-# Deploy the latest vLLM ServingRuntime with Qwen3 support
-kubectl apply -f ../model_serving/vllm-latest-runtime.yaml
+# Remove the problematic OpenDataHub webhook
+kubectl delete mutatingwebhookconfiguration mutating.odh-model-controller.opendatahub.io
 
-# Deploy the Qwen3-0.6B model (recommended for testing)
-kubectl apply -f ../model_serving/qwen3-0.6b-vllm-raw.yaml
+# Retry deploying your model
+kubectl apply -f ../model_serving/vllm-simulator-kserve.yaml
+```
 
+This won't affect your KServe deployment since you're using the standard KServe controller, not OpenDataHub's model controller.
+
+#### OpenShift Security Context Constraints
+
+**For OpenShift clusters, deploy Security Context Constraints before deploying models:**
+
+```bash
+# Deploy ServiceAccount and SecurityContextConstraints for OpenShift
+kubectl apply -f 02b-openshift-scc.yaml
+```
+
+This creates:
+- A `kserve-service-account` ServiceAccount in the `llm` namespace
+- A `kserve-scc` SecurityContextConstraints that allows the necessary permissions for model containers
+
+#### Deploy Models
+
+**For OpenShift clusters:**
+
+```bash
+# Deploy the OpenShift-compatible simulator model (without Istio sidecar)
+kubectl apply -f ../model_serving/vllm-simulator-kserve-openshift.yaml
+
+# Deploy the OpenShift-compatible vLLM ServingRuntime with GPU support
+kubectl apply -f ../model_serving/vllm-latest-runtime-openshift.yaml
+
+# Deploy the Qwen3-0.6B model on GPU nodes (requires nvidia.com/gpu.present=true node)
+kubectl apply -f ../model_serving/qwen3-0.6b-vllm-raw-openshift.yaml
+```
+
+> **Note**: The OpenShift manifests disable Istio sidecar injection (`sidecar.istio.io/inject: "false"`) to avoid iptables/networking issues in restrictive OpenShift environments. The GPU model includes proper node selection and tolerations for NVIDIA GPU nodes.
+
+#### Monitor Model Deployment
+
+```bash
 # Monitor InferenceService deployment status
 kubectl get inferenceservice -n llm
+
+# Watch model deployment (GPU models take 5-10 minutes for model download)
+kubectl describe inferenceservice qwen3-0-6b-instruct -n llm
+
+# Check if pods are running (may take 5-15 minutes for model downloads)
+kubectl get pods -n llm -l serving.kserve.io/inferenceservice
+
+# Follow logs to see model loading progress (GPU models)
+kubectl logs -n llm -l serving.kserve.io/inferenceservice=qwen3-0-6b-instruct -c kserve-container -f
+
+# Wait for GPU model to be ready
+kubectl wait --for=condition=Ready inferenceservice qwen3-0-6b-instruct -n llm --timeout=900s
+
+# Check GPU allocation
+kubectl describe node ip-10-0-71-72.ec2.internal | grep -A5 "Allocated resources"
+```
 
 # Watch model deployment (takes 5-10 minutes for model download)
 kubectl describe inferenceservice qwen3-0-6b-instruct -n llm
@@ -214,7 +292,7 @@ kubectl logs -n llm -l serving.kserve.io/inferenceservice -c kserve-container -f
 kubectl wait --for=condition=Ready inferenceservice qwen3-0-6b-instruct -n llm --timeout=900s
 ```
 
-> Option 2 - If in a KIND environment or non-GPU use:
+> Option 2 - for non-GPU use:
 
 ```shell
 kubectl apply -f ../model_serving/vllm-simulator-kserve.yaml
@@ -238,32 +316,32 @@ kubectl apply -f 07-rate-limit-policies.yaml
 kubectl rollout restart deployment kuadrant-operator-controller-manager -n kuadrant-system
 ```
 
-### 7. Start Port Forwarding for Local Access
+### 7. Access Your Models
 
-If running on kind/minikube, you need port forwarding to access the models:
+#### For OpenShift Clusters:
 
-```bash
-# Port-forward to Kuadrant gateway (REQUIRED for authentication)
-kubectl port-forward -n llm svc/inference-gateway-istio 8000:80 &
-```
+Your models are directly accessible via the OpenShift Routes (no port-forwarding needed):
+
+- **Simulator**: `http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`
+- **Qwen3**: `http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com`
 
 ### 8. Test the MaaS API
 
 Test all user tiers and rate limits with the automated script:
 
 ```bash
-# Test simulator model (default)
+# Test simulator model (default - uses OpenShift route)
 ./scripts/test-request-limits.sh
 
 # Test qwen3 model when ready
-./scripts/test-request-limits.sh --host qwen3.maas.local --model qwen3-0-6b-instruct
+./scripts/test-request-limits.sh --host qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com --model qwen3-0-6b-instruct
 ```
 
 Example output showing rate limiting in action:
 
 ```bash
-Host    : simulator.maas.local
-Model ID: simulator-model
+📡  Host    : simulator.maas.local
+🤖  Model ID: simulator-model
 
 === Free User (5 requests per 2min) ===
 Free req #1  -> 200
@@ -299,40 +377,40 @@ Free2 req #7  -> 429
 
 Test individual models with manual curl commands:
 
-**Simulator Model:**
+**Simulator Model (OpenShift):**
 
 ```bash
 # Single request test
 curl -s -H 'Authorization: APIKEY freeuser1_key' \
      -H 'Content-Type: application/json' \
      -d '{"model":"simulator-model","messages":[{"role":"user","content":"Hello!"}]}' \
-     http://simulator.maas.local:8000/v1/chat/completions
+     http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions
 
 # Test rate limiting (Free tier: 5 requests per 2min)
 for i in {1..7}; do
   printf "Free tier request #%-2s -> " "$i"
   curl -s -o /dev/null -w "%{http_code}\n" \
-       -X POST http://simulator.maas.local:8000/v1/chat/completions \
+       -X POST http://simulator-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions \
        -H 'Authorization: APIKEY freeuser1_key' \
        -H 'Content-Type: application/json' \
        -d '{"model":"simulator-model","messages":[{"role":"user","content":"Test request"}],"max_tokens":10}'
 done
 ```
 
-**Qwen3 Model:**
+**Qwen3 Model (OpenShift):**
 
 ```bash
 # Single request test
 curl -s -H 'Authorization: APIKEY premiumuser1_key' \
      -H 'Content-Type: application/json' \
      -d '{"model":"qwen3-0-6b-instruct","messages":[{"role":"user","content":"Hello!"}]}' \
-     http://qwen3.maas.local:8000/v1/chat/completions
+     http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions
 
 # Test rate limiting (Premium tier: 20 requests per 2min)
 for i in {1..22}; do
   printf "Premium tier request #%-2s -> " "$i"
   curl -s -o /dev/null -w "%{http_code}\n" \
-       -X POST http://qwen3.maas.local:8000/v1/chat/completions \
+       -X POST http://qwen3-llm.apps.summit-gpu.octo-emerging.redhataicoe.com/v1/chat/completions \
        -H 'Authorization: APIKEY premiumuser1_key' \
        -H 'Content-Type: application/json' \
        -d '{"model":"qwen3-0-6b-instruct","messages":[{"role":"user","content":"Test request"}],"max_tokens":10}'
@@ -341,10 +419,10 @@ done
 
 **Available API Keys and Rate Limits:**
 
-| Tier | API Keys | Rate Limits (per 2min) |
-|------|----------|------------------------|
-| **Free** | `freeuser1_key`, `freeuser2_key` | 5 requests |
-| **Premium** | `premiumuser1_key`, `premiumuser2_key` | 20 requests |
+| Tier        | API Keys                               | Rate Limits (per 2min) |
+|-------------|----------------------------------------|------------------------|
+| **Free**    | `freeuser1_key`, `freeuser2_key`       | 5 requests             |
+| **Premium** | `premiumuser1_key`, `premiumuser2_key` | 20 requests            |
 
 - Expected Responses
 
@@ -354,29 +432,20 @@ done
 
 ### 9. Deploy Observability
 
-Deploy Prometheus and monitoring components:
+Deploy ServiceMonitors to integrate with OpenShift's existing Prometheus monitoring:
 
 ```bash
-# Install Prometheus Operator
-kubectl apply --server-side --field-manager=quickstart-installer -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/master/bundle.yaml
-
-# Wait for Prometheus Operator to be ready
-kubectl wait --for=condition=Available deployment/prometheus-operator -n default --timeout=300s
-
-# From models-aas/deployment/kuadrant Kuadrant prometheus observability
+# Deploy ServiceMonitors for Kuadrant components (no additional Prometheus needed)
 kubectl apply -k kustomize/prometheus/
 
-# Wait for Prometheus to be ready
-kubectl wait --for=condition=Running prometheus/models-aas-observability -n llm-observability --timeout=300s
+# Verify ServiceMonitors are created
+kubectl get servicemonitor -n kuadrant-system
 
-# Port-forward to access Prometheus UI
-kubectl port-forward -n llm-observability svc/models-aas-observability 9090:9090 &
-
-# Forward Limitador admin metric scrape target
-kubectl -n kuadrant-system port-forward svc/limitador-limitador 8080:8080
-
-# Access Prometheus at http://localhost:9090
+# Access Grafana Dashboard via OpenShift Route
+# Grafana: https://grafana-route-llm-d-observability.apps.summit-gpu.octo-emerging.redhataicoe.com
 ```
+
+**Note:** This deployment uses OpenShift's built-in user workload monitoring instead of deploying a separate Prometheus instance.
 
 ### Query the Limitador Scrape Endpoint
 
@@ -394,51 +463,34 @@ authorized_calls{limitador_namespace="llm/simulator-domain-route"} 100
 limited_calls{limitador_namespace="llm/simulator-domain-route"} 16
 ```
 
-### Query Metrics via Prom API
+### Query Metrics via Prometheus
 
+**Option 1: Query via OpenShift User Workload Monitoring Prometheus:**
 ```bash
-# Get limited_calls via Prometheus
-curl -sG --data-urlencode 'query=limited_calls'     http://localhost:9090/api/v1/query | jq '.data.result'
-[
-  {
-    "metric": {
-      "__name__": "limited_calls",
-      "container": "limitador",
-      "endpoint": "http",
-      "instance": "10.244.0.19:8080",
-      "job": "limitador-limitador",
-      "limitador_namespace": "llm/simulator-domain-route",
-      "namespace": "kuadrant-system",
-      "pod": "limitador-limitador-84bdfb4747-n8h44",
-      "service": "limitador-limitador"
-    },
-    "value": [
-      1754366303.129,
-      "16"
-    ]
-  }
-]
+# Query limited_calls via OpenShift Prometheus
+oc exec -n openshift-user-workload-monitoring prometheus-user-workload-0 -c prometheus -- \
+  curl -s 'http://localhost:9090/api/v1/query' --data-urlencode 'query=limited_calls' | jq '.data.result'
 
-curl -sG --data-urlencode 'query=authorized_calls'     http://localhost:9090/api/v1/query | jq '.data.result'
-[
-  {
-    "metric": {
-      "__name__": "authorized_calls",
-      "container": "limitador",
-      "endpoint": "http",
-      "instance": "10.244.0.19:8080",
-      "job": "limitador-limitador",
-      "limitador_namespace": "llm/simulator-domain-route",
-      "namespace": "kuadrant-system",
-      "pod": "limitador-limitador-84bdfb4747-n8h44",
-      "service": "limitador-limitador"
-    },
-    "value": [
-      1754366383.534,
-      "100"
-    ]
-  }
-]
+# Query authorized_calls via OpenShift Prometheus  
+oc exec -n openshift-user-workload-monitoring prometheus-user-workload-0 -c prometheus -- \
+  curl -s 'http://localhost:9090/api/v1/query' --data-urlencode 'query=authorized_calls' | jq '.data.result'
+```
+
+**Option 2: Query metrics directly from Limitador pod:**
+```bash
+# Query metrics directly from Limitador pod
+oc exec -n kuadrant-system deployment/limitador-limitador -- curl -s localhost:8080/metrics | grep calls
+
+# Example output:
+# HELP limited_calls Limited calls
+# TYPE limited_calls counter
+limited_calls{limitador_namespace="llm/simulator-domain-route"} 3
+limited_calls{limitador_namespace="llm/qwen3-domain-route"} 6
+
+# HELP authorized_calls Authorized calls
+# TYPE authorized_calls counter
+authorized_calls{limitador_namespace="llm/qwen3-domain-route"} 27
+authorized_calls{limitador_namespace="llm/simulator-domain-route"} 16
 ```
 
 ## Troubleshooting
@@ -492,9 +544,7 @@ kubectl scale deployment/limitador -n kuadrant-system --replicas=3
 kubectl scale deployment/authorino -n kuadrant-system --replicas=2
 ```
 
----
-
-## Keycloak OIDC Authentication (Alternative to API Keys)
+## Keycloak OIDC Authentication (Alternative to API Keys - TODO: Not validated on Openshift yet, only in the [vanilla/dev deployment](../kuadrant))
 
 For production deployments, you can use Keycloak with OIDC JWT tokens instead of static API keys for dev. This provides user management, token expiration, and group-based access control.
 
