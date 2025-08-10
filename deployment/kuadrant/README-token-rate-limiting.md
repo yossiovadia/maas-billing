@@ -691,3 +691,202 @@ kubectl apply -f keycloak/06-rate-limit-policy-oidc.yaml
 kubectl delete -f 06-auth-policies-apikey.yaml
 kubectl delete -f 07-rate-limit-policies.yaml
 ```
+
+---
+
+## Custom WASM-Shim Image Replacement for Enhanced Token Logging
+
+When using TokenRateLimitPolicy with OLM-deployed Kuadrant, you may want to replace the default wasm-shim image with a custom version that provides enhanced logging for debugging token rate limiting behavior.
+
+### Problem
+The OLM-managed Kuadrant operator uses a specific wasm-shim image defined in its ClusterServiceVersion (CSV). Manual changes to WasmPlugin resources are automatically reverted by the operator's reconciliation process.
+
+### Solution
+To persistently use a custom wasm-shim image, you need to update the operator's environment variable at the CSV level, which OLM uses to generate WasmPlugin configurations.
+
+### Step-by-Step Process
+
+1. **Update the OLM ClusterServiceVersion to use custom image**:
+   ```bash
+   # Replace the default wasm-shim image in the CSV
+   kubectl -n kuadrant-system patch csv kuadrant-operator.v0.0.0 --type='json' \
+     -p='[{"op": "replace", "path": "/spec/install/spec/deployments/0/spec/template/spec/containers/0/env/1/value", "value": "oci://ghcr.io/nerdalert/wasm-shim:latest"}]'
+   ```
+
+2. **Restart the operator to pick up the new environment variable**:
+   ```bash
+   kubectl -n kuadrant-system rollout restart deployment/kuadrant-operator-controller-manager
+   kubectl -n kuadrant-system wait --for=condition=Available deployment/kuadrant-operator-controller-manager --timeout=60s
+   ```
+
+3. **Verify the operator environment variable was updated**:
+   ```bash
+   kubectl -n kuadrant-system get deployment kuadrant-operator-controller-manager \
+     -o jsonpath='{.spec.template.spec.containers[0].env[1]}' | jq
+   ```
+   Expected output:
+   ```json
+   {
+     "name": "RELATED_IMAGE_WASMSHIM",
+     "value": "oci://ghcr.io/nerdalert/wasm-shim:latest"
+   }
+   ```
+
+4. **Force reconciliation of TokenRateLimitPolicy to regenerate WasmPlugin**:
+   ```bash
+   # Add annotation to trigger operator reconciliation
+   kubectl -n llm patch tokenratelimitpolicy gateway-token-rate-limits --type='json' \
+     -p='[{"op": "add", "path": "/metadata/annotations/force-reconcile", "value": "force-reconcile"}]'
+   ```
+
+5. **Verify WasmPlugin was updated with custom image**:
+   ```bash
+   kubectl -n llm get wasmplugin kuadrant-inference-gateway -o yaml | grep -A 3 -B 3 "url:"
+   ```
+   Expected output:
+   ```yaml
+   url: oci://ghcr.io/nerdalert/wasm-shim:latest
+   ```
+
+6. **Confirm gateway pods are fetching the custom image**:
+   ```bash
+   kubectl -n llm logs deployment/inference-gateway-istio --since=2m | grep "fetching image.*nerdalert"
+   ```
+   Expected output:
+   ```
+   info	wasm	fetching image nerdalert/wasm-shim from registry ghcr.io with tag latest
+   ```
+
+### Monitoring Custom WASM-Shim Logs
+
+Once the custom wasm-shim is loaded, you can monitor its enhanced logging:
+
+```bash
+# Monitor all wasm-related logs from the gateway
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep wasm
+
+# Monitor token rate limiting logs specifically
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep -E "(token|rate|limit)"
+
+# Watch for enhanced logging from custom wasm-shim
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep -E "(nerdalert|custom|enhanced)"
+
+# Monitor wasm plugin configuration and rule processing
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep -E "(plugin|config|rule)"
+
+# Watch for rate limiting decisions and token consumption
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep -E "(OVER_LIMIT|allowed|denied|consumed)"
+```
+
+### Real-time Testing and Log Monitoring
+
+To see the custom wasm-shim in action, run this in one terminal to monitor logs:
+
+```bash
+# Terminal 1: Monitor enhanced logs
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep -E "(wasm|token|rate|limit|nerdalert)"
+```
+
+Then in another terminal, generate test requests:
+
+```bash
+# Terminal 2: Generate test requests to trigger token rate limiting
+for i in {1..10}; do
+  echo "Request #$i:"
+  curl -s -w "HTTP Status: %{http_code}\n" \
+    -H 'Authorization: APIKEY freeuser1_key' \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"simulator-model","messages":[{"role":"user","content":"Test request #'$i'"}],"max_tokens":5}' \
+    http://simulator.maas.local:8000/v1/chat/completions
+  echo "---"
+  sleep 2
+done
+```
+
+### ⚠️ Important Compatibility Note
+
+**Custom wasm-shim images must support TokenRateLimitPolicy features**. If you encounter errors like:
+
+```
+wasm log: failed to parse plugin config: unknown variant `ratelimit-report`, expected one of `auth`, `ratelimit`, `ratelimit-check`
+```
+
+This indicates the custom image doesn't support token rate limiting. You must either:
+- Use a newer version of the custom image that supports `ratelimit-report`
+- Revert to the default image for token rate limiting functionality
+
+### Restoring Default Image
+
+If token rate limiting stops working with the custom image:
+
+1. **Revert the CSV to use default image**:
+   ```bash
+   kubectl -n kuadrant-system patch csv kuadrant-operator.v0.0.0 --type='json' \
+     -p='[{"op": "replace", "path": "/spec/install/spec/deployments/0/spec/template/spec/containers/0/env/1/value", "value": "oci://quay.io/kuadrant/wasm-shim:latest"}]'
+   ```
+
+2. **Restart operator and force reconciliation**:
+   ```bash
+   kubectl -n kuadrant-system rollout restart deployment/kuadrant-operator-controller-manager
+   kubectl -n kuadrant-system wait --for=condition=Available deployment/kuadrant-operator-controller-manager --timeout=60s
+   
+   # Force WasmPlugin regeneration
+   kubectl -n llm patch tokenratelimitpolicy gateway-token-rate-limits --type='json' \
+     -p='[{"op": "replace", "path": "/metadata/annotations/force-reconcile", "value": "restore-default"}]'
+   ```
+
+3. **If WasmPlugin doesn't update, force deletion to regenerate**:
+   ```bash
+   kubectl -n llm delete wasmplugin kuadrant-inference-gateway
+   # The operator will recreate it automatically
+   ```
+
+### Verification Commands
+
+```bash
+# Check current wasm-shim image being used
+kubectl -n llm get wasmplugin kuadrant-inference-gateway -o jsonpath='{.spec.url}'
+
+# Monitor gateway logs for image fetching
+kubectl -n llm logs deployment/inference-gateway-istio -f | grep "fetching image"
+
+# Verify operator environment variable
+kubectl -n kuadrant-system get deployment kuadrant-operator-controller-manager \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RELATED_IMAGE_WASMSHIM")].value}'
+
+# Check for wasm parsing errors (indicates compatibility issues)
+kubectl -n llm logs deployment/inference-gateway-istio --since=5m | grep -E "(failed to parse|unknown variant)"
+
+# Test token rate limiting functionality
+for i in {1..5}; do
+  curl -s -o /dev/null -w "Request #$i -> %{http_code}\n" \
+    -H 'Authorization: APIKEY freeuser1_key' \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"simulator-model","messages":[{"role":"user","content":"Test"}],"max_tokens":1}' \
+    http://simulator.maas.local:8000/v1/chat/completions
+done
+```
+
+### Why This Works
+- **OLM Management**: The CSV is the source of truth for OLM-managed operators
+- **Environment Variable**: `RELATED_IMAGE_WASMSHIM` controls which image the operator uses for WasmPlugin generation
+- **Persistent**: Changes to the CSV persist across operator restarts and reconciliations
+- **Automatic Propagation**: The operator automatically regenerates WasmPlugin resources when TokenRateLimitPolicy changes are detected
+
+### Custom WASM-Shim Benefits
+Using a compatible custom wasm-shim image (like `ghcr.io/nerdalert/wasm-shim:latest`) provides:
+- Enhanced token tracking logs
+- Detailed rate limiting decision logging
+- Custom metrics and debugging information
+- Better visibility into token consumption patterns
+- Real-time monitoring of rate limit enforcement
+
+### Troubleshooting
+If the custom image isn't working:
+1. **Verify CSV was updated**: Check the operator environment variable
+2. **Ensure operator restarted successfully**: Check deployment status
+3. **Check TokenRateLimitPolicy reconciliation**: Verify the annotation was added
+4. **Monitor for compatibility errors**: Look for "unknown variant" errors in gateway logs
+5. **Test functionality**: Verify token rate limiting is working as expected
+6. **Monitor enhanced logs**: Use the logging commands above to see custom wasm-shim output
+7. **Revert if needed**: Use default image if compatibility issues persist

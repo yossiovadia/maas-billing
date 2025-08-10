@@ -25,3 +25,27 @@ data:
       "cpuRequest": "200m",
       "cpuLimit": "1"
     }
+  logger: |
+    {
+      "image": "kserve/agent:v0.15.2",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1"
+    }
+  batcher: |
+    {
+      "image": "kserve/agent:v0.15.2",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1"
+    }
+  agent: |
+    {
+      "image": "kserve/agent:v0.15.2",
+      "memoryRequest": "100Mi",
+      "memoryLimit": "1Gi",
+      "cpuRequest": "100m",
+      "cpuLimit": "1"
+    }
