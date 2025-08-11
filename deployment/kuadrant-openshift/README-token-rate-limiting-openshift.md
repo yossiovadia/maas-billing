@@ -12,7 +12,7 @@ These demos require a Kuadrant wasm-shim fork with metric support `oci://ghcr.io
 2. Hit Token Caps on each user
 3. View Token Metrics in Prometheus 
 
-<video src="https://github.com/user-attachments/assets/c08d3e39-3d70-49ff-a67e-1a062eb339b0" controls></video>
+<video src="https://github.com/user-attachments/assets/2c205809-b7fa-466f-b74a-e0c6c9c26569" controls></video>
 
 ### Demo: Token Rate Policy and Charge Metering
 
@@ -20,7 +20,7 @@ These demos require a Kuadrant wasm-shim fork with metric support `oci://ghcr.io
 2. Generate User Tracked Request Load 
 3. View Token Metrics and Chargeback Metering in Prometheus
 
-<video src="https://github.com/user-attachments/assets/2c205809-b7fa-466f-b74a-e0c6c9c26569" controls></video>
+<video src="https://github.com/user-attachments/assets/c08d3e39-3d70-49ff-a67e-1a062eb339b0" controls></video>
 
 ## Architecture Overview
 
