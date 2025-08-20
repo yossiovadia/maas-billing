@@ -5,3 +5,8 @@ node_modules/
 dist/
 build/
 .idea/
+
+# Package lock files
+package-lock.json
+apps/frontend/package-lock.json
+apps/backend/package-lock.json
