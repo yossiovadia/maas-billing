@@ -1,10 +1,19 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { QoSService } from './services/qosService';
 import { logger } from './utils/logger';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+    methods: ["GET", "POST"]
+  }
+});
+const PORT = process.env.PORT || 3005;
 
 // Middleware
 app.use(cors());
@@ -21,8 +30,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize QoS service
-const qosService = new QoSService();
+// Initialize QoS service with Socket.IO
+const qosService = new QoSService(io);
 
 /**
  * Extract user context from Authorino headers
@@ -137,13 +146,41 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  logger.info('Client connected to QoS service', {
+    socketId: socket.id,
+    clientIP: socket.handshake.address
+  });
+
+  // Send current metrics immediately on connection
+  socket.emit('queue_update', qosService.getMetrics());
+  socket.emit('queue_stats', qosService.getDetailedStats());
+
+  socket.on('disconnect', () => {
+    logger.info('Client disconnected from QoS service', {
+      socketId: socket.id
+    });
+  });
+
+  // Handle client requests for metrics
+  socket.on('get_metrics', () => {
+    socket.emit('queue_update', qosService.getMetrics());
+  });
+
+  socket.on('get_detailed_stats', () => {
+    socket.emit('queue_stats', qosService.getDetailedStats());
+  });
+});
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   logger.info('QoS Prioritizer service started', {
     port: PORT,
     environment: process.env.NODE_ENV || 'development',
     simulationMode: process.env.SIMULATION_MODE === 'true',
-    logLevel: 'info'
+    logLevel: 'info',
+    socketIO: 'enabled'
   });
 });
 

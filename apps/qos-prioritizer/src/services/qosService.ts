@@ -1,6 +1,7 @@
 import PQueue from 'p-queue';
 import axios from 'axios';
 import { EventEmitter } from 'events';
+import { Server as SocketIOServer } from 'socket.io';
 import { logger } from '../utils/logger';
 
 interface QueueRequest {
@@ -21,6 +22,42 @@ interface QoSMetrics {
   avgResponseTime: number;
 }
 
+interface DetailedQoSStats {
+  timestamp: string;
+  queues: {
+    enterprise: {
+      size: number;
+      pending: number;
+      concurrency: number;
+      isPaused: boolean;
+    };
+    premium: {
+      size: number;
+      pending: number;
+      concurrency: number;
+      isPaused: boolean;
+    };
+    free: {
+      size: number;
+      pending: number;
+      concurrency: number;
+      isPaused: boolean;
+    };
+  };
+  performance: {
+    totalProcessed: number;
+    processingRate: number;
+    avgWaitTime: number;
+    avgProcessingTime: number;
+  };
+  activeRequests: Array<{
+    id: string;
+    tier: string;
+    startTime: number;
+    waitTime: number;
+  }>;
+}
+
 export class QoSService extends EventEmitter {
   private enterpriseQueue: PQueue;
   private premiumQueue: PQueue;
@@ -28,11 +65,18 @@ export class QoSService extends EventEmitter {
   private metrics: QoSMetrics;
   private simulationMode: boolean;
   private modelEndpoint: string;
+  private io?: SocketIOServer;
+  private activeRequests: Map<string, { id: string; tier: string; startTime: number; waitTime: number }>;
+  private performanceHistory: Array<{ timestamp: number; processingTime: number; waitTime: number }>;
+  private metricsInterval?: NodeJS.Timeout;
   
-  constructor() {
+  constructor(io?: SocketIOServer) {
     super();
+    this.io = io;
     this.simulationMode = process.env.SIMULATION_MODE === 'true';
     this.modelEndpoint = 'http://localhost:8004';
+    this.activeRequests = new Map();
+    this.performanceHistory = [];
     
     // Create priority queues with different concurrency
     this.enterpriseQueue = new PQueue({ 
@@ -57,9 +101,12 @@ export class QoSService extends EventEmitter {
     };
     
     this.setupEventHandlers();
+    this.startMetricsBroadcast();
+    
     logger.info('QoS Service initialized with p-queue', {
       simulationMode: this.simulationMode,
-      endpoint: this.modelEndpoint
+      endpoint: this.modelEndpoint,
+      socketIO: !!this.io
     });
   }
   
@@ -82,6 +129,22 @@ export class QoSService extends EventEmitter {
     
     this.metrics.totalRequests++;
     
+    // Track the request
+    this.activeRequests.set(id, {
+      id,
+      tier,
+      startTime,
+      waitTime: 0
+    });
+    
+    // Emit request started event
+    this.broadcastEvent('request_queued', {
+      requestId: id,
+      tier,
+      queueSizes: this.getQueueSizes(),
+      timestamp: new Date().toISOString()
+    });
+    
     return new Promise((resolve, reject) => {
       const queueRequest: QueueRequest = {
         id,
@@ -103,6 +166,7 @@ export class QoSService extends EventEmitter {
       ).then(resolve).catch(reject);
       
       this.updateQueueMetrics();
+      this.broadcastQueueUpdate();
     });
   }
   
@@ -125,6 +189,18 @@ export class QoSService extends EventEmitter {
       const processingTime = Date.now() - startTime;
       const queueTime = startTime - request.timestamp;
       
+      // Store performance data
+      this.performanceHistory.push({
+        timestamp: Date.now(),
+        processingTime,
+        waitTime: queueTime
+      });
+      
+      // Keep only last 100 entries
+      if (this.performanceHistory.length > 100) {
+        this.performanceHistory.shift();
+      }
+      
       logger.info('Request completed', {
         requestId: request.id,
         tier: request.tier,
@@ -133,11 +209,23 @@ export class QoSService extends EventEmitter {
         simulation: this.simulationMode
       });
       
+      // Emit completion event
+      this.broadcastEvent('request_completed', {
+        requestId: request.id,
+        tier: request.tier,
+        processingTime,
+        queueTime,
+        queueSizes: this.getQueueSizes(),
+        timestamp: new Date().toISOString()
+      });
+      
       this.updateMetrics(processingTime);
+      this.broadcastQueueUpdate();
       return response;
       
     } finally {
       this.metrics.activeRequests--;
+      this.activeRequests.delete(request.id);
     }
   }
   
@@ -260,6 +348,90 @@ export class QoSService extends EventEmitter {
     this.updateQueueMetrics();
     return { ...this.metrics };
   }
+
+  /**
+   * Get detailed statistics for real-time monitoring
+   */
+  getDetailedStats(): DetailedQoSStats {
+    this.updateQueueMetrics();
+    
+    const now = Date.now();
+    const recentHistory = this.performanceHistory.filter(h => now - h.timestamp < 300000); // Last 5 minutes
+    
+    const avgWaitTime = recentHistory.length > 0 
+      ? recentHistory.reduce((sum, h) => sum + h.waitTime, 0) / recentHistory.length 
+      : 0;
+      
+    const avgProcessingTime = recentHistory.length > 0
+      ? recentHistory.reduce((sum, h) => sum + h.processingTime, 0) / recentHistory.length
+      : 0;
+    
+    const processingRate = recentHistory.length / 5; // Requests per minute over 5 minutes
+    
+    return {
+      timestamp: new Date().toISOString(),
+      queues: {
+        enterprise: {
+          size: this.enterpriseQueue.size,
+          pending: this.enterpriseQueue.pending,
+          concurrency: this.enterpriseQueue.concurrency,
+          isPaused: this.enterpriseQueue.isPaused
+        },
+        premium: {
+          size: this.premiumQueue.size,
+          pending: this.premiumQueue.pending,
+          concurrency: this.premiumQueue.concurrency,
+          isPaused: this.premiumQueue.isPaused
+        },
+        free: {
+          size: this.freeQueue.size,
+          pending: this.freeQueue.pending,
+          concurrency: this.freeQueue.concurrency,
+          isPaused: this.freeQueue.isPaused
+        }
+      },
+      performance: {
+        totalProcessed: this.metrics.totalRequests,
+        processingRate,
+        avgWaitTime,
+        avgProcessingTime
+      },
+      activeRequests: Array.from(this.activeRequests.values()).map(req => ({
+        ...req,
+        waitTime: Date.now() - req.startTime
+      }))
+    };
+  }
+
+  /**
+   * Broadcast event to connected Socket.IO clients
+   */
+  private broadcastEvent(event: string, data: any): void {
+    if (this.io) {
+      this.io.emit(event, data);
+    }
+  }
+
+  /**
+   * Broadcast queue update to all clients
+   */
+  private broadcastQueueUpdate(): void {
+    if (this.io) {
+      this.io.emit('queue_update', this.getMetrics());
+    }
+  }
+
+  /**
+   * Start periodic metrics broadcasting
+   */
+  private startMetricsBroadcast(): void {
+    if (this.io) {
+      this.metricsInterval = setInterval(() => {
+        this.broadcastEvent('queue_stats', this.getDetailedStats());
+        this.broadcastQueueUpdate();
+      }, 1000); // Broadcast every second
+    }
+  }
   
   /**
    * Setup event handlers for monitoring
@@ -299,6 +471,11 @@ export class QoSService extends EventEmitter {
    */
   async shutdown(): Promise<void> {
     logger.info('Shutting down QoS Service...');
+    
+    // Clear metrics interval
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+    }
     
     // Wait for all queues to finish
     await Promise.all([
