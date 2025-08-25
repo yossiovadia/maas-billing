@@ -6,7 +6,7 @@ metadata:
   namespace: platform-services
   labels:
     app: key-manager
-    version: v1
+    version: v2
 spec:
   replicas: 1
   selector:
@@ -16,7 +16,7 @@ spec:
     metadata:
       labels:
         app: key-manager
-        version: v1
+        version: v2
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
@@ -24,8 +24,8 @@ spec:
       securityContext:
         runAsNonRoot: true
       containers:
-      - name: api
-        image: ghcr.io/nerdalert/maas-key-manager:latest
+      - name: key-manager
+        image: ghcr.io/nerdalert/maas-key-manager:teams
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -38,15 +38,21 @@ spec:
           value: kuadrant.io/apikeys-by
         - name: SECRET_SELECTOR_VALUE
           value: rhcl-keys
-        - name: DISCOVERY_ROUTE
-          value: inference-route
         - name: PORT
           value: "8080"
+        - name: CREATE_DEFAULT_TEAM
+          value: "true"
+        - name: TOKEN_RATE_LIMIT_POLICY_NAME
+          value: "gateway-token-rate-limits"
+        - name: AUTH_POLICY_NAME
+          value: "gateway-auth-policy"
         - name: ADMIN_API_KEY
           valueFrom:
             secretKeyRef:
               name: key-manager-admin
               key: admin-key
+        - name: GIN_MODE
+          value: "debug"
         livenessProbe:
           httpGet:
             path: /health
