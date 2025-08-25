@@ -100,8 +100,13 @@ app.post('/v1/chat/completions', async (req, res) => {
       userId
     });
     
+    // Check demo mode: 'advanced' forces real LLM, 'simulation' forces simulation
+    const demoMode = req.headers['x-demo-mode'] as string;
+    const isAdvancedDemo = demoMode === 'advanced';
+    const isSimulationDemo = demoMode === 'simulation';
+    
     // Process through QoS system
-    const response = await qosService.processRequest(requestId, tier, prompt, { userId, tier });
+    const response = await qosService.processRequest(requestId, tier, prompt, { userId, tier, isAdvancedDemo, isSimulationDemo });
     
     const totalTime = Date.now() - startTime;
     logger.info('Request completed successfully', {

@@ -185,12 +185,25 @@ send_request() {
             auth_identity_header='{"metadata":{"annotations":{"kuadrant.io/groups":"free","secret.kuadrant.io/user-id":"'$customer_type'-'$customer_id'"},"sla":"best_effort"}}'
         fi
         
-        local response=$(curl -w "%{http_code}" \
-            -H "Content-Type: application/json" \
-            -H "x-auth-identity: $auth_identity_header" \
-            -d "{\"model\":\"gpt2-medium\",\"messages\":[{\"role\":\"user\",\"content\":\"$prompt\"}],\"max_tokens\":30}" \
-            --max-time $timeout_duration \
-            "$ENDPOINT_URL" 2>/tmp/curl_debug_${customer_type}_${customer_id}.log)
+        # For Option 3, add advanced demo header to trigger real LLM processing
+        if [[ "$DEMO_MODE" == "with-qos-3tier" ]]; then
+            local response=$(curl -w "%{http_code}" \
+                -H "Content-Type: application/json" \
+                -H "x-auth-identity: $auth_identity_header" \
+                -H "x-demo-mode: advanced" \
+                -d "{\"model\":\"gpt2-medium\",\"messages\":[{\"role\":\"user\",\"content\":\"$prompt\"}],\"max_tokens\":30}" \
+                --max-time $timeout_duration \
+                "$ENDPOINT_URL" 2>/tmp/curl_debug_${customer_type}_${customer_id}.log)
+        else
+            # For Option 2, add simulation demo header to ensure fast simulation
+            local response=$(curl -w "%{http_code}" \
+                -H "Content-Type: application/json" \
+                -H "x-auth-identity: $auth_identity_header" \
+                -H "x-demo-mode: simulation" \
+                -d "{\"model\":\"gpt2-medium\",\"messages\":[{\"role\":\"user\",\"content\":\"$prompt\"}],\"max_tokens\":30}" \
+                --max-time $timeout_duration \
+                "$ENDPOINT_URL" 2>/tmp/curl_debug_${customer_type}_${customer_id}.log)
+        fi
     else
         # Direct request to LLM
         local response=$(curl -w "%{http_code}" \
@@ -239,6 +252,8 @@ fi
 echo ""
 
 if [[ "$DEMO_MODE" == "with-qos-3tier" ]]; then
+    echo "🔧 Advanced Demo Mode: Using real LLM processing for authentic queue behavior"
+    
     # Launch 30 requests with minimal delays to create maximum queue contention
     echo "Launching 30 requests rapidly in mixed order to create queue contention and demonstrate QoS..."
     
@@ -309,15 +324,15 @@ if [[ "$DEMO_MODE" == "with-qos-3tier" ]]; then
     send_request "FREE" "18" &
     
 else
-    # Original 5-request demo (fast timing like option 3)
+    # Original 5-request demo (optimized timing to create queue congestion)
     send_request "FREE" "1" &
-    sleep 0.02
+    sleep 0.3
     send_request "FREE" "2" &
-    sleep 0.02  
+    sleep 0.3  
     send_request "ENTERPRISE" "1" &
-    sleep 0.02
+    sleep 0.3
     send_request "FREE" "3" &
-    sleep 0.02
+    sleep 0.3
     send_request "ENTERPRISE" "2" &
 fi
 

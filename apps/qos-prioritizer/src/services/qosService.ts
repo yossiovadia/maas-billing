@@ -11,6 +11,8 @@ interface QueueRequest {
   timestamp: number;
   resolve: (response: any) => void;
   reject: (error: Error) => void;
+  isAdvancedDemo?: boolean;
+  isSimulationDemo?: boolean;
 }
 
 interface QoSMetrics {
@@ -152,7 +154,9 @@ export class QoSService extends EventEmitter {
         prompt,
         timestamp: startTime,
         resolve,
-        reject
+        reject,
+        isAdvancedDemo: userContext?.isAdvancedDemo || false,
+        isSimulationDemo: userContext?.isSimulationDemo || false
       };
       
       // Route to appropriate priority queue
@@ -180,7 +184,15 @@ export class QoSService extends EventEmitter {
     try {
       let response;
       
-      if (this.simulationMode) {
+      // Check demo mode flags
+      const isAdvancedDemo = request.isAdvancedDemo || false;
+      const isSimulationDemo = request.isSimulationDemo || false;
+      
+      // Determine processing mode:
+      // - isSimulationDemo=true: Force simulation (regardless of service mode)
+      // - isAdvancedDemo=true: Force real LLM (regardless of service mode)  
+      // - Otherwise: Use service default (simulationMode setting)
+      if (isSimulationDemo || (this.simulationMode && !isAdvancedDemo)) {
         response = await this.simulateResponse(request);
       } else {
         response = await this.callLLM(request);
@@ -233,9 +245,9 @@ export class QoSService extends EventEmitter {
    * Simulate LLM response for testing
    */
   private async simulateResponse(request: QueueRequest): Promise<any> {
-    // Realistic delay based on tier (Enterprise gets faster "hardware")
-    const delay = request.tier === 'enterprise' ? 2000 : 
-                  request.tier === 'premium' ? 3000 : 4000;
+    // Same processing time for all tiers to demonstrate pure QoS prioritization
+    // (Real QoS benefits come from queue management, not faster hardware)
+    const delay = 4000;
     
     await new Promise(resolve => setTimeout(resolve, delay));
     
@@ -313,12 +325,13 @@ export class QoSService extends EventEmitter {
   }
   
   /**
-   * Update queue size metrics
+   * Update queue size metrics (includes both waiting and processing)
    */
   private updateQueueMetrics(): void {
-    this.metrics.enterpriseQueue = this.enterpriseQueue.size;
-    this.metrics.premiumQueue = this.premiumQueue.size;
-    this.metrics.freeQueue = this.freeQueue.size;
+    // Include both queued (size) and currently processing (pending) requests
+    this.metrics.enterpriseQueue = this.enterpriseQueue.size + this.enterpriseQueue.pending;
+    this.metrics.premiumQueue = this.premiumQueue.size + this.premiumQueue.pending;
+    this.metrics.freeQueue = this.freeQueue.size + this.freeQueue.pending;
   }
   
   /**
@@ -331,13 +344,13 @@ export class QoSService extends EventEmitter {
   }
   
   /**
-   * Get current queue sizes
+   * Get current queue sizes (includes both waiting and processing)
    */
   private getQueueSizes(): Record<string, number> {
     return {
-      enterprise: this.enterpriseQueue.size,
-      premium: this.premiumQueue.size,
-      free: this.freeQueue.size
+      enterprise: this.enterpriseQueue.size + this.enterpriseQueue.pending,
+      premium: this.premiumQueue.size + this.premiumQueue.pending,
+      free: this.freeQueue.size + this.freeQueue.pending
     };
   }
   
