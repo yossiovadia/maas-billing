@@ -3,7 +3,7 @@ name: Key Manager Build
 on:
   pull_request:
     paths:
-      - 'deployment/kuadrant-openshift/key-manager/**'
+      - 'deployment/services/key-manager/**'
       - 'Makefile'
 
 jobs:
