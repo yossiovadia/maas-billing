@@ -173,7 +173,7 @@ Ensure these ports are available:
 - **8004**: LLM model (port-forwarded from Kubernetes)
 - **3005**: QoS service 
 - **3000**: Frontend (optional)
-- **3001**: Backend (optional)
+- **3001**: Backend (optional - unused, QoS service runs on 3005)
 
 ## Demo Modes
 

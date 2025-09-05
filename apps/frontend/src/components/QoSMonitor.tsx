@@ -112,7 +112,7 @@ export default function QoSMonitor() {
 
   const connectSocket = () => {
     try {
-      socketRef.current = io('http://localhost:3001', {
+      socketRef.current = io('http://localhost:3005', {
         transports: ['websocket'],
         forceNew: true,
       });
@@ -136,7 +136,7 @@ export default function QoSMonitor() {
       });
 
       // QoS event handlers
-      socket.on('qos_queue_update', (data: QoSMetrics) => {
+      socket.on('queue_update', (data: QoSMetrics) => {
         setMetrics(data);
         
         // Add to queue history for charts
@@ -154,18 +154,19 @@ export default function QoSMonitor() {
         });
       });
 
-      socket.on('qos_queue_stats', (data: DetailedStats) => {
+      socket.on('queue_stats', (data: DetailedStats) => {
         setDetailedStats(data);
       });
 
-      socket.on('qos_request_queued', (data: RequestEvent) => {
+      // Recent events for request activity
+      socket.on('request_queued', (data: RequestEvent) => {
         setRecentEvents(prev => {
           const newEvents = [{ ...data, type: 'queued' }, ...prev];
           return newEvents.slice(0, maxEvents);
         });
       });
 
-      socket.on('qos_request_completed', (data: RequestEvent) => {
+      socket.on('request_completed', (data: RequestEvent) => {
         setRecentEvents(prev => {
           const newEvents = [{ ...data, type: 'completed' }, ...prev];
           return newEvents.slice(0, maxEvents);

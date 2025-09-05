@@ -9,7 +9,7 @@ You currently have running:
 - ✅ **Istio Gateway**: `inference-gateway-istio` on port 8000
 - ✅ **KServe**: Complete model serving infrastructure  
 - ✅ **Kuadrant**: Authorino + Limitador for auth/rate limiting
-- ✅ **QoS Service**: Running on port 3003
+- ✅ **QoS Service**: Running on port 3005
 
 ## Demo Scripts
 
@@ -102,7 +102,7 @@ FREE     🆓 F1       SUCCESS 3.34s
 1. **QoS Service Logs**: Watch the background terminal for priority calculations
 2. **LLM Performance**: Use `kubectl logs -n llm vllm-simulator-predictor-xxx` to see model logs
 3. **Network Issues**: Check port forwards are running: `ps aux | grep port-forward`
-4. **Queue Status**: `curl http://localhost:3003/v1/qos/status | jq '.'`
+4. **Queue Status**: `curl http://localhost:3005/v1/qos/status | jq '.'`
 
 ## Next Steps
 

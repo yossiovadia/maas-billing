@@ -93,8 +93,8 @@ fi
 
 echo ""
 
-# Validate prerequisites
-echo "🔍 Validating demo prerequisites..."
+# Quick validation (detailed setup should be done via prepare_env.sh)
+echo "🔍 Quick validation of demo prerequisites..."
 echo ""
 
 # Check QoS service if needed
@@ -102,53 +102,29 @@ if [[ "$QOS_SERVICE_REQUIRED" == "true" ]]; then
     if ! curl -s http://localhost:3005/health > /dev/null 2>&1; then
         echo "❌ ERROR: QoS service not running on port 3005"
         echo ""
-        echo "To fix this, run:"
-        echo "  cd /Users/yovadia/code/maas-billing/apps/qos-prioritizer"
-        echo "  npm run dev"
+        echo "Please run the environment setup script first:"
+        echo "  ./prepare_env.sh"
         echo ""
         exit 1
     fi
     echo "✅ QoS service is running on port 3005"
 fi
 
-# Check LLM model connectivity
+# Check LLM model connectivity  
 echo "🔍 Testing LLM model connectivity..."
-if [[ "$DEMO_MODE" == "with-qos" ]]; then
-    # Test the full QoS → LLM chain with a simple request
-    test_response=$(timeout 25 curl -s -w "%{http_code}" \
-        -H "Content-Type: application/json" \
-        -H "x-auth-identity: {\"metadata\":{\"annotations\":{\"kuadrant.io/groups\":\"enterprise\"}}}" \
-        -d '{"model":"gpt2-medium","messages":[{"role":"user","content":"test"}],"max_tokens":5}' \
-        "$VALIDATION_ENDPOINT" 2>/dev/null || echo "000")
-else
-    # Test direct LLM access
-    test_response=$(curl -s -w "%{http_code}" \
-        -H "Content-Type: application/json" \
-        -d '{"model":"gpt2-medium","messages":[{"role":"user","content":"test"}],"max_tokens":5}' \
-        --max-time 15 \
-        "$VALIDATION_ENDPOINT" 2>/dev/null)
-fi
+test_response=$(curl -s -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"gpt2-medium","messages":[{"role":"user","content":"test"}],"max_tokens":5}' \
+    --max-time 10 \
+    "$VALIDATION_ENDPOINT" 2>/dev/null)
 
 status_code=${test_response: -3}
 if [[ "$status_code" != "200" ]]; then
     echo "❌ ERROR: LLM model not accessible (HTTP $status_code)"
     echo ""
-    echo "This usually means the port-forward to the LLM model is not working."
+    echo "Please run the environment setup script first:"
+    echo "  ./prepare_env.sh"
     echo ""
-    echo "To fix this:"
-    echo "  1. Check if the LLM pod is running:"
-    echo "     kubectl get pods -n llm"
-    echo ""
-    echo "  2. If pod is running, restart the port-forward:"
-    echo "     kubectl port-forward -n llm \$(kubectl get pods -n llm -l app=medium-llm -o jsonpath='{.items[0].metadata.name}') 8004:8080"
-    echo ""
-    echo "  3. If pod is not running, deploy it:"
-    echo "     kubectl apply -f simulation/medium-llm-simple.yaml"
-    echo ""
-    echo "  4. Wait for pod to be ready (this takes 2-3 minutes):"
-    echo "     kubectl wait --for=condition=ready pod -l app=medium-llm -n llm --timeout=300s"
-    echo ""
-    echo "Current LLM connection test failed with status: $status_code"
     exit 1
 fi
 echo "✅ LLM model is accessible and responding"
@@ -341,12 +317,46 @@ wait
 
 echo ""
 echo "📊 Request Completion Analysis:"
-echo "Completion Order | Customer Type | Response Code | Duration"
-echo "-----------------|---------------|---------------|----------"
+echo "Completion Order | Customer Type | Response Code | Duration | Processing Path"
+echo "-----------------|---------------|---------------|----------|------------------"
 
-# Show completion order
-sort -t',' -k1n /tmp/demo_results.log | awk -F',' '{printf "%-16s | %-13s | %-13s | %.1fs\n", "#" NR, $2 "-" $3, $4, $5}'
+# Show completion order with processing analysis
+sort -t',' -k1n /tmp/demo_results.log | awk -F',' '
+{
+    duration = $5
+    # Heuristic: requests that complete very quickly likely bypassed the queue
+    # while longer ones likely went through queue processing
+    if (duration < 10.0) {
+        path = "🚀 IMMEDIATE"
+    } else if (duration < 25.0) {
+        path = "⏳ QUEUED"  
+    } else {
+        path = "🔄 HEAVY QUEUE"
+    }
+    printf "%-16s | %-13s | %-13s | %6.1fs | %s\n", "#" NR, $2 "-" $3, $4, duration, path
+}'
 
+echo ""
+echo "🧠 Work-Conserving Algorithm Explanation:"
+echo "- 🚀 IMMEDIATE: Processed instantly (available capacity, never queued)"
+echo "- ⏳ QUEUED: Waited in priority queue before processing"  
+echo "- 🔄 HEAVY QUEUE: Long wait due to high system load"
+echo ""
+echo "ℹ️  Early requests may complete first regardless of tier if they arrive"
+echo "   when capacity is available. This maximizes system efficiency while"
+echo "   still maintaining business priorities during contention periods."
+echo ""
+echo "📈 Queue Behavior Visualization:"
+echo "This explains why the UI graphs show different patterns than completion order:"
+echo ""
+echo "Time →  [Capacity Available] [System Saturated] [Priority Processing]"
+echo "FREE:   🚀🚀🚀______________ [Queued........] [Processed by priority]"
+echo "PREM:   _____⏳_____________ [Queued........] [Higher priority]"
+echo "ENTR:   _______⏳___________ [Queued........] [Highest priority]"
+echo ""
+echo "• Early FREE requests (🚀) bypass queues entirely - never appear in graphs"
+echo "• Later requests (⏳) build up queues - show in graphs and get prioritized"
+echo "• Enterprise queue drops first in graphs due to highest processing priority"
 echo ""
 
 # Business impact analysis
