@@ -7,11 +7,14 @@ build/
 .idea/
 .claude
 
-# Process ID files
-.backend.pid
-.frontend.pid
+*.pid
 
 # Package lock files
 package-lock.json
 apps/frontend/package-lock.json
 apps/backend/package-lock.json
+
+# Go test coverage files
+coverage.out
+coverage.html
+bin/
