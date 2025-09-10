@@ -44,10 +44,15 @@ const PolicyManager: React.FC = () => {
       try {
         setLoading(true);
         const data = await apiService.getPolicies();
-        setPolicies(data);
-        setFilteredPolicies(data);
+        // Ensure data is always an array
+        const policies = Array.isArray(data) ? data : [];
+        setPolicies(policies);
+        setFilteredPolicies(policies);
       } catch (error) {
         console.error('Failed to fetch policies:', error);
+        // Set empty arrays on error to prevent map errors
+        setPolicies([]);
+        setFilteredPolicies([]);
       } finally {
         setLoading(false);
       }
@@ -115,6 +120,10 @@ const PolicyManager: React.FC = () => {
   };
 
   const formatTimeRange = (policy: Policy) => {
+    // Handle real Kuadrant policies that don't have timeRange
+    if (!policy.timeRange) {
+      return 'Always Active';
+    }
     if (policy.timeRange.unlimited) {
       return 'Unlimited';
     }
@@ -122,10 +131,11 @@ const PolicyManager: React.FC = () => {
   };
 
   const formatRequestLimits = (policy: Policy) => {
+    // Handle real Kuadrant policies that don't have requestLimits
     if (!policy.requestLimits) {
       return null; // Don't show anything for auth policies
     }
-    if (policy.requestLimits.tokenLimit === null) {
+    if (policy.requestLimits.tokenLimit === null || policy.requestLimits.tokenLimit === undefined) {
       return 'Unlimited';
     }
     return `${policy.requestLimits.tokenLimit.toLocaleString()} requests/${policy.requestLimits.timePeriod}`;
