@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -18,10 +19,12 @@ import (
 	"github.com/opendatahub-io/maas-billing/key-manager/internal/keys"
 	"github.com/opendatahub-io/maas-billing/key-manager/internal/models"
 	"github.com/opendatahub-io/maas-billing/key-manager/internal/teams"
+	"github.com/opendatahub-io/maas-billing/key-manager/internal/tier"
 )
 
 func main() {
 	cfg := config.Load()
+	flag.Parse()
 
 	router := registerHandlers(cfg)
 
@@ -67,6 +70,10 @@ func registerHandlers(cfg *config.Config) *gin.Engine {
 	if err != nil {
 		log.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
+
+	tierMapper := tier.NewMapper(clusterConfig.ClientSet, cfg.Namespace)
+	tierHandler := tier.NewHandler(tierMapper)
+	router.POST("/tiers/lookup", tierHandler.TierLookup)
 
 	// Initialize managers
 	policyMgr := teams.NewPolicyManager(

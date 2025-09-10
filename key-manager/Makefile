@@ -122,7 +122,11 @@ build-push-image: build-image push-image ## Build and push container image
 .PHONY: deploy-dev
 deploy-dev: ## Deploy to development
 	kubectl create namespace key-manager || true
-	kustomize build $(PROJECT_DIR)/deploy/overlays/dev | kubectl apply -f -
+	cd $(PROJECT_DIR)/deploy/overlays/dev && \
+		cp kustomization.yaml kustomization.yaml.backup && \
+		trap 'mv kustomization.yaml.backup kustomization.yaml 2>/dev/null || true' EXIT && \
+		kustomize edit set image key-manager=$(FULL_IMAGE) && \
+		kustomize build . | kubectl apply -f -
 
 .PHONY: run
 run: build ## Run the key-manager locally
