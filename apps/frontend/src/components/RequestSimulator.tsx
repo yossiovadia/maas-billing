@@ -115,10 +115,10 @@ const RequestSimulator: React.FC = () => {
 
       // Transform models data to match expected structure
       const transformedModels = (modelsData || []).map((model: any) => ({
-        id: model.name || model.id,
+        id: model.id || model.name,
         name: model.name || model.id,
         provider: 'KServe',
-        description: model.description || `${model.name} Model`,
+        description: model.description || `${model.name || model.id} Model`,
       }));
       
       console.log('Loaded models:', transformedModels);
@@ -219,6 +219,7 @@ const RequestSimulator: React.FC = () => {
       max_tokens: simulationForm.maxTokens,
       tier: selectedTokenTier,
       apiKey: getApiKey(),
+      authPrefix: simulationForm.authPrefix,
     };
 
     // Kuadrant supports both APIKEY and Bearer prefixes
