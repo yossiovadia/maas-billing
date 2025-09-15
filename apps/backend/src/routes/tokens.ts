@@ -126,9 +126,21 @@ router.get('/', async (_req, res) => {
     
     const allTokens: any[] = [];
     
-    // Get current user ID - in a real implementation, this would come from authentication
-    // For now, we'll use a default user or extract from environment
-    const currentUserId = process.env.DEFAULT_USER_ID || 'noyitz';
+    // Get current user ID from OpenShift authentication
+    let currentUserId = process.env.DEFAULT_USER_ID;
+    if (!currentUserId) {
+      try {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+        const { stdout } = await execAsync('oc whoami');
+        currentUserId = stdout.trim();
+        logger.info(`Using authenticated OpenShift user: ${currentUserId}`);
+      } catch (error) {
+        logger.warn('Could not get authenticated user, falling back to default:', error);
+        currentUserId = 'default-user'; // Only fallback if oc command fails
+      }
+    }
     
     // For each team, get the keys and filter for current user
     for (const team of teams) {
@@ -160,7 +172,7 @@ router.get('/', async (_req, res) => {
             const execAsync = promisify(exec);
             
             // Get the secret value using oc command
-            const { stdout } = await execAsync(`oc get secret ${key.secret_name} -o jsonpath='{.data.api_key}' 2>/dev/null`);
+            const { stdout } = await execAsync(`oc get secret ${key.secret_name} -n llm -o jsonpath='{.data.api_key}' 2>/dev/null`);
             if (stdout && stdout.trim()) {
               // Decode the base64 value
               actualApiKey = Buffer.from(stdout.trim(), 'base64').toString('utf-8');
@@ -231,8 +243,21 @@ router.post('/create', async (req, res) => {
     // Use default team if none specified
     const targetTeamId = team_id || 'default';
     
-    // Use current authenticated user ID instead of generating from token name
-    const currentUserId = process.env.DEFAULT_USER_ID || 'noyitz';
+    // Use current authenticated user ID from OpenShift
+    let currentUserId = process.env.DEFAULT_USER_ID;
+    if (!currentUserId) {
+      try {
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+        const { stdout } = await execAsync('oc whoami');
+        currentUserId = stdout.trim();
+        logger.info(`Creating token for authenticated OpenShift user: ${currentUserId}`);
+      } catch (error) {
+        logger.warn('Could not get authenticated user for token creation, falling back to default:', error);
+        currentUserId = 'default-user'; // Only fallback if oc command fails
+      }
+    }
     
     // Create the token via key manager
     const createTokenData = {
