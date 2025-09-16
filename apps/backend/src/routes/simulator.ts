@@ -71,7 +71,6 @@ router.post('/chat/completions', async (req, res) => {
     });
 
     // Configuration constants
-    const CLUSTER_DOMAIN = process.env.CLUSTER_DOMAIN || 'apps.your-cluster.example.com';
     const QOS_SERVICE_URL = process.env.QOS_SERVICE_URL || 'http://localhost:3005';
     const REQUEST_TIMEOUT = 30000;
 
@@ -89,14 +88,23 @@ router.post('/chat/completions', async (req, res) => {
       });
     }
     
-    // Map model to endpoint URL (these go through Kuadrant gateway)
-    const modelEndpoints: Record<string, string> = {
-      'qwen3-0-6b-instruct': `http://qwen3-llm.apps.${CLUSTER_DOMAIN}/v1/chat/completions`,
-      'vllm-simulator': `http://simulator-llm.apps.${CLUSTER_DOMAIN}/v1/chat/completions`,
-      // Add more models as needed
-    };
-
-    const targetEndpoint = modelEndpoints[model] || modelEndpoints['qwen3-0-6b-instruct'];
+    // Get model endpoint dynamically from cluster
+    let targetEndpoint: string;
+    try {
+      const { modelService } = await import('../services/modelService');
+      targetEndpoint = await modelService.getModelEndpoint(model);
+    } catch (error) {
+      logger.error('Failed to get model endpoint:', {
+        model,
+        error: error.message
+      });
+      
+      return res.status(404).json({
+        success: false,
+        error: `Model '${model}' not found`,
+        details: error.message
+      });
+    }
     
     logger.info('Proxying request to Kuadrant endpoint:', {
       endpoint: targetEndpoint,
@@ -136,10 +144,38 @@ router.post('/chat/completions', async (req, res) => {
 
       // If rate limited or other error, return that status
       if (kuadrantResponse.status !== 200) {
+        // Parse OpenShift HTML error responses for better user experience
+        let errorMessage = `Kuadrant returned ${kuadrantResponse.status}: ${kuadrantResponse.statusText}`;
+        let details = kuadrantResponse.data;
+        
+        // Check if response contains OpenShift HTML error page
+        if (typeof kuadrantResponse.data === 'string' && kuadrantResponse.data.includes('<html>')) {
+          const htmlContent = kuadrantResponse.data;
+          
+          // Extract meaningful error messages from OpenShift HTML
+          if (htmlContent.includes('<h1>Application is not available</h1>')) {
+            errorMessage = 'Application is not available';
+            details = 'The model service is not running or route does not exist. Check if the model deployment is active and all pods are running.';
+          } else if (htmlContent.includes('The host doesn\'t exist')) {
+            errorMessage = 'Host not found';
+            details = 'Route configuration error - the hostname does not exist in the cluster.';
+          } else if (htmlContent.includes('Route and path matches, but all pods are down')) {
+            errorMessage = 'Service unavailable';
+            details = 'All model service pods are down. Check deployment status and pod health.';
+          } else if (htmlContent.includes('<h1>')) {
+            // Extract any h1 tag content as the error message
+            const h1Match = htmlContent.match(/<h1>([^<]+)<\/h1>/);
+            if (h1Match) {
+              errorMessage = h1Match[1];
+              details = 'Check model service status and deployment configuration.';
+            }
+          }
+        }
+        
         return res.status(kuadrantResponse.status).json({
           success: false,
-          error: `Kuadrant returned ${kuadrantResponse.status}: ${kuadrantResponse.statusText}`,
-          details: kuadrantResponse.data,
+          error: errorMessage,
+          details: details,
           kuadrant_status: kuadrantResponse.status,
           rate_limited: kuadrantResponse.status === 429
         });
@@ -263,10 +299,38 @@ async function handleQoSRequest(req: express.Request, res: express.Response, par
         duration: `${duration}ms`
       });
 
+      // Parse OpenShift HTML error responses for better user experience
+      let errorMessage = `QoS service returned ${qosResponse.status}: ${qosResponse.statusText}`;
+      let details = qosResponse.data;
+      
+      // Check if response contains OpenShift HTML error page
+      if (typeof qosResponse.data === 'string' && qosResponse.data.includes('<html>')) {
+        const htmlContent = qosResponse.data;
+        
+        // Extract meaningful error messages from OpenShift HTML
+        if (htmlContent.includes('<h1>Application is not available</h1>')) {
+          errorMessage = 'Application is not available';
+          details = 'The model service is not running or route does not exist. Check if the model deployment is active and all pods are running.';
+        } else if (htmlContent.includes('The host doesn\'t exist')) {
+          errorMessage = 'Host not found';
+          details = 'Route configuration error - the hostname does not exist in the cluster.';
+        } else if (htmlContent.includes('Route and path matches, but all pods are down')) {
+          errorMessage = 'Service unavailable';
+          details = 'All model service pods are down. Check deployment status and pod health.';
+        } else if (htmlContent.includes('<h1>')) {
+          // Extract any h1 tag content as the error message
+          const h1Match = htmlContent.match(/<h1>([^<]+)<\/h1>/);
+          if (h1Match) {
+            errorMessage = h1Match[1];
+            details = 'Check model service status and deployment configuration.';
+          }
+        }
+      }
+
       return res.status(qosResponse.status).json({
         success: false,
-        error: `QoS service returned ${qosResponse.status}: ${qosResponse.statusText}`,
-        details: qosResponse.data,
+        error: errorMessage,
+        details: details,
         qos_status: qosResponse.status,
         duration: `${duration}ms`,
         customer_tier: customerTier
