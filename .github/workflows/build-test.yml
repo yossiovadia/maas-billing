@@ -1,15 +1,19 @@
-name: Build Test
+name: Build
 
 on:
   pull_request:
-    paths:
-      - 'deployment/**'
   push:
     branches:
       - main
 
 jobs:
-  build-test:
+  validate-manifests:
+    name: Validate Kustomize manifests
+    timeout-minutes: 10
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-validate-manifests
+      cancel-in-progress: true
+
     runs-on: ubuntu-latest
     
     steps:
@@ -17,10 +21,10 @@ jobs:
 
     - name: Install kustomize
       run: |
-        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        set -euo pipefail
+        curl -fsSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- 5.7.1
         sudo mv kustomize /usr/local/bin/
 
-    - name: Run build tests
+    - name: Validate Kustomize manifests
       run: |
-        cd deployment/scripts
-        ./tests/test-builds.sh
+        ./scripts/validate-manifests.sh
