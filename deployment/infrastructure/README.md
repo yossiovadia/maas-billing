@@ -19,10 +19,40 @@ Base platform components required for Models-as-a-Service (MaaS) deployment.
 export CLUSTER_DOMAIN="apps.your-cluster.com"
 
 # 3. Deploy core infrastructure
-kustomize build deployment/infrastructure | envsubst | kubectl apply -f -
 
-# 4. Deploy custom limitador image(this should be pushed into the main product soon so this can be removed)
-kubectl patch limitador limitador   -n kuadrant-system   --type merge -p '{"spec":{"image":"ghcr.io/redhat-et/limitador:metrics","version":""}}'
+## Platform-Specific Deployments
+
+### OpenShift Deployment (Recommended)
+
+For OpenShift clusters, use the OpenShift-specific overlay which provides proper operator-based installation:
+
+```bash
+# Deploy with OpenShift-specific configuration
+kustomize build deployment/infrastructure/overlays/openshift | envsubst | kubectl apply -f -
+```
+
+**OpenShift overlay includes:**
+
+- OperatorGroup and Subscription resources for proper OLM integration
+- OpenShift-specific Kuadrant operator configuration
+- Sail Operator subscription for Istio management
+- CatalogSource for Kuadrant operator catalog
+
+### Generic Kubernetes Deployment
+
+For non-OpenShift Kubernetes clusters:
+
+```bash
+# Deploy with standard configuration
+kustomize build deployment/infrastructure | envsubst | kubectl apply -f -
+```
+
+**Note:** The base configuration may require additional operator installations or API compatibility adjustments for non-OpenShift platforms.
+
+## 4. Deploy custom limitador image (this should be pushed into the main product soon so this can be removed)
+
+```bash
+kubectl patch limitador limitador -n kuadrant-system --type merge -p '{"spec":{"image":"ghcr.io/redhat-et/limitador:metrics","version":""}}'
 ```
 
 Move to [next steps](../examples/) to deploy examples.
@@ -48,6 +78,7 @@ The `install-dependencies.sh` script provides a convenient way to install all re
 ```
 
 **Components installed in order:**
+
 - **Istio**: Service mesh and Gateway API configuration
 - **cert-manager**: Certificate management for TLS and webhooks  
 - **KServe**: Model serving platform
@@ -56,16 +87,29 @@ The `install-dependencies.sh` script provides a convenient way to install all re
 
 ## Components
 
-- **namespaces/**: Required Kubernetes namespaces (`llm`, `llm-observability`, `kuadrant-system`)
-- **istio/**: Service mesh and Gateway API configuration  
+### Base Infrastructure
+
+- **namespaces/**: Required Kubernetes namespaces (`llm`, `llm-observability`, `platform-services`)
+- **istio/**: Service mesh and Gateway API configuration
 - **kserve/**: Model serving platform with OpenShift integration
-- **kuadrant/**: API gateway policies and operators (via Helm)
+- **kuadrant/**: API gateway policies using standard Kuadrant configuration
+- **maas-api/**: MaaS API deployment with RBAC and routing
+- **grafana/**: Grafana instance for observability dashboards
 - **gateway/**: Traffic routing and external access (parameterized domains)
+
+### OpenShift Overlay
+
+Located in `overlays/openshift/`, this overlay modifies the base configuration for OpenShift:
+
+- **Enhanced operator management**: Uses OpenShift's Operator Lifecycle Manager (OLM)
+- **Sail Operator subscription**: Manages Istio installation via Red Hat's Sail Operator
+- **Kuadrant operator catalog**: Uses OpenShift-specific Kuadrant operator configuration
+- **Proper resource scoping**: Includes OperatorGroup resources for namespace-scoped operators
 
 ## Prerequisites
 
 - **OpenShift 4.14+** or Kubernetes 1.28+ with admin access
-- **kustomize v4.0+** 
+- **kustomize v4.0+**
 - **envsubst** (for domain parameterization)
 
 ## Deployment Order
@@ -94,7 +138,17 @@ export CLUSTER_DOMAIN="maas.local"
 
 ### Kuadrant Installation
 
-Kuadrant operators are installed via Helm by the installer script, then configured via kustomize manifests under `kustomize-templates/kuadrant/kuadrant-configure`.
+#### Base Configuration
+
+Kuadrant operators are installed via Helm by the installer script, then configured via kustomize manifests under `kustomize-templates/kuadrant/kuadrant-configure`. The base configuration uses the standard Kuadrant operator configuration.
+
+#### OpenShift Configuration
+
+The OpenShift overlay replaces the standard Kuadrant configuration with OpenShift-specific operator management:
+
+- Subscribes to Kuadrant operator via OpenShift's Operator Lifecycle Manager
+- Includes proper CatalogSource and OperatorGroup resources
+- Uses the OpenShift-compatible operator versions and configurations
 
 ## Verification
 
@@ -123,20 +177,23 @@ After core infrastructure is deployed, proceed to the [examples](../examples/) d
 
 ### Common Issues
 
-**Domain Resolution**
+#### Domain Resolution
+
 ```bash
 # Check Gateway hostname
 kubectl get gateway inference-gateway -n llm -o yaml | grep hostname
 ```
 
-**Kuadrant Not Ready**
+#### Kuadrant Not Ready
+
 ```bash
 # Check operator status
 kubectl get kuadrant kuadrant -n kuadrant-system
 kubectl get deployments -n kuadrant-system
 ```
 
-**KServe Configuration**
+#### KServe Configuration
+
 ```bash
 # Verify domain in KServe config
 kubectl get configmap inferenceservice-config -n kserve -o yaml | grep ingressDomain
