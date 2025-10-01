@@ -6,7 +6,18 @@ metadata:
 
 # Base configuration
 resources:
-- ../../examples/gpu-deployment
-
-# Kubernetes Ingress (for non-OpenShift clusters)
-- ingress.yaml
+  # Core gateway routes and networking
+  - ../../base
+  
+  # Core MaaS API components
+  - ../../base/maas-api
+  
+  # Policies
+  - ../../base/policies
+  
+  # Kubernetes Ingress (for non-OpenShift clusters)
+  - ingress.yaml
+  
+  # Sample models (optional, can be commented out if not needed)
+  # - ../../samples/models/simulator
+  # - ../../samples/models/qwen3

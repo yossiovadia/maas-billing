@@ -8,8 +8,8 @@ Our goal is to create a comprehensive platform for **Models as a Service** with 
 ## 📦 Technology Stack
 
 - **Kuadrant/Authorino/Limitador**: API gateway and policy engine
-- **Istio**: Service mesh and traffic management
-- **Gateway API**: Traffic routing and management
+- **Gateway API**: Traffic routing and management (OpenShift native implementation)
+- **OpenShift Service Mesh**: Automatically provisioned when Gateway API is enabled (includes Istio)
 - **React**: Frontend framework
 - **Go**: Backend frameworks
 
@@ -26,7 +26,7 @@ Our goal is to create a comprehensive platform for **Models as a Service** with 
 ## 🏗️ Architecture
 
 ### Backend Components
-- **API Gateway**: Istio/Envoy with Gateway API support and Kuadrant integration
+- **API Gateway**: OpenShift Gateway API implementation with Envoy proxy and Kuadrant integration
 - **Policy Engine**: Real-time policy enforcement through Kuadrant (Authorino + Limitador)
 - **Model Serving**: KServe-based AI model deployment with vLLM runtime
 - **Model Discovery**: Automatic model listing model resources
@@ -46,14 +46,25 @@ Our goal is to create a comprehensive platform for **Models as a Service** with 
 
 ## 🚀 Quick Start
 
-For deployment instructions, see the READMEs in the deployment directory:
+### Deploy Infrastructure
 
-- **[Infrastructure](deployment/infrastructure/README.md)** - Base platform components (Istio, KServe, Kuadrant operators)
-- **[Example Usage](deployment/examples/README.md)** - Complete deployment examples with models, authentication, and observability
+See the comprehensive [Deployment Guide](deployment/README.md) for detailed instructions.
 
-## Development Setup
+Quick deployment for OpenShift:
+```bash
+export CLUSTER_DOMAIN="apps.your-openshift-cluster.com"
+kustomize build deployment/overlays/openshift | envsubst | kubectl apply -f -
+```
 
-After deploying the infrastructure, start the frontend and backend:
+Quick deployment for Kubernetes:
+```bash
+export CLUSTER_DOMAIN="your-kubernetes-domain.com"
+kustomize build deployment/overlays/kubernetes | envsubst | kubectl apply -f -
+```
+
+### Start Development Environment
+
+After deploying the infrastructure:
 
 #### Option A: One-Command Start (Recommended)
 ```bash
@@ -107,117 +118,94 @@ This will:
 ## 🔧 Development
 
 ### Project Structure
-```
-maas-billing/
-├── apps/
-│   ├── frontend/          # React frontend with Material-UI
-│   │   ├── src/
-│   │   │   ├── components/    # Policy Manager, Metrics Dashboard, etc.
-│   │   │   ├── hooks/         # API integration hooks
-│   │   │   └── services/      # API client
-│   │   └── package.json
-│   └── backend/           # Node.js/Express API server
-│       ├── src/
-│       │   ├── routes/        # API endpoints
-│       │   ├── services/      # Kuadrant integration
-│       │   └── utils/         # Logging and utilities
-│       └── package.json
-├── deployment/kuadrant/   # Kuadrant infrastructure
-└── start-*.sh           # Development scripts
-```
 
-### API Endpoints
-- `GET /api/v1/policies` - List all policies
-- `POST /api/v1/policies` - Create new policy
-- `PUT /api/v1/policies/:id` - Update policy
-- `DELETE /api/v1/policies/:id` - Delete policy
-- `GET /api/v1/metrics/live-requests` - Real-time metrics
-- `GET /api/v1/metrics/dashboard` - Dashboard statistics
+| Directory | Description | Documentation |
+|-----------|-------------|---------------|
+| `apps/frontend/` | React frontend with Material-UI | [Frontend Guide](apps/frontend/README.md) |
+| `apps/backend/` | Node.js/Express API server | [Backend Guide](apps/backend/README.md) |
+| `maas-api/` | Go API for key management | [MaaS API Guide](maas-api/README.md) |
+| `deployment/` | Kubernetes/OpenShift deployments | [Deployment Guide](deployment/README.md) |
+| `scripts/` | Automation and utility scripts | - |
 
-### Environment Variables
+### Available Scripts
+
+From the repository root:
+- `./start-dev.sh` - Start full development environment
+- `./stop-dev.sh` - Stop all development services
+- `./start-backend.sh` - Start backend only
+- `./start-frontend.sh` - Start frontend only
+- `./scripts/test-gateway.sh` - Test gateway endpoints
+
+### Backend API Endpoints
+
+The backend provides these key endpoints:
+- `GET /api/v1/models` - List available models
+- `GET /api/v1/policies` - Retrieve current policies
+- `POST /api/v1/policies` - Create/update policies
+- `GET /api/v1/metrics/live-requests` - Live metrics stream
+- `POST /api/v1/simulator/run` - Run policy simulation
+
+### Frontend Components
+
+Key React components:
+- `PolicyBuilder` - Drag-and-drop policy editor
+- `MetricsDashboard` - Real-time metrics visualization
+- `RequestSimulator` - Policy testing interface
+- `TokenManagement` - API key management
+
+## 🧪 Testing
+
+### Test Infrastructure
 ```bash
-# Backend (.env)
-PORT=3001
-FRONTEND_URL=http://localhost:3000
+# Use the test script
+./scripts/test-gateway.sh
+
+# Or manually test endpoints
+curl http://localhost:3001/health
 ```
 
-## 🛑 Stopping the Platform
-
+### Run Frontend Tests
 ```bash
-# Stop all services
-./stop-dev.sh
-
-# Or manually stop individual components
-pkill -f "npm start"    # Stop frontend
-pkill -f "npm run dev"  # Stop backend
+cd apps/frontend
+npm test
 ```
 
-## 📊 Monitoring & Logs
-
-### Application Logs
+### Run Backend Tests
 ```bash
-# Real-time logs
-tail -f backend.log     # Backend API logs
-tail -f frontend.log    # Frontend build logs
-
-# Service logs
-kubectl logs -n kuadrant-system -l app=limitador
-kubectl logs -n kuadrant-system -l app=authorino
+cd apps/backend
+npm test
 ```
 
-### Metrics and Health Checks
-- Backend health: `curl http://localhost:3001/health`
-- Kuadrant status: `kubectl get pods -n kuadrant-system`
-- Live metrics: `curl http://localhost:3001/api/v1/metrics/live-requests`
+## 📚 Documentation
 
-## 🔍 Troubleshooting
-
-### Common Issues
-
-**Port Already in Use**
-```bash
-# Kill processes on ports 3000/3001
-lsof -ti:3000 | xargs kill -9
-lsof -ti:3001 | xargs kill -9
-```
-
-**Kuadrant Not Ready**
-```bash
-# Check Kuadrant deployment
-kubectl get pods -n kuadrant-system
-kubectl get gateways -A
-```
-
-**Frontend Not Loading**
-```bash
-# Clear browser cache and restart frontend
-rm -rf apps/frontend/node_modules/.cache
-./start-frontend.sh
-```
-
-**No Metrics Data**
-```bash
-# Check Kuadrant components
-kubectl port-forward -n kuadrant-system svc/limitador 8080:8080
-curl http://localhost:8080/metrics
-```
+- [Deployment Guide](deployment/README.md) - Complete deployment instructions
+- [Platform-Specific Overlays](deployment/overlays/README.md) - OpenShift vs Kubernetes
+- [MaaS API Documentation](maas-api/README.md) - Go API for key management
+- [OAuth Setup Guide](OAUTH_SETUP.md) - Configure OAuth authentication
 
 ## 🤝 Contributing
 
+We welcome contributions! Please:
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-## 📄 License
+## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License.
 
----
+## 🙏 Acknowledgments
 
-## 📚 Additional Resources
+Built with:
+- [Kuadrant](https://kuadrant.io/) for API management
+- [KServe](https://kserve.github.io/) for model serving
+- [OpenShift](https://www.openshift.com/) with Service Mesh for infrastructure
+- [React](https://react.dev/) and [Material-UI](https://mui.com/)
 
-- **Kuadrant Documentation**: https://kuadrant.io/
-- **KServe Documentation**: https://kserve.github.io/website/
-- **Istio Gateway API**: https://istio.io/latest/docs/tasks/traffic-management/ingress/gateway-api/
+## 📞 Support
+
+For questions or issues:
+- Open an issue on GitHub
+- Check the [deployment guide](deployment/README.md) for troubleshooting
+- Review the [samples](deployment/samples/models/) for examples
