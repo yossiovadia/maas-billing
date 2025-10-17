@@ -405,7 +405,7 @@ kubectl delete networkpolicy odh-model-controller -n opendatahub 2>/dev/null && 
   echo "   ⚠️  NetworkPolicy not found or already removed"
 
 echo "   🔧 Restarting Kuadrant, Authorino, and Limitador operators to refresh webhook configurations..."
-kubectl rollout restart deployment kuadrant-operator-controller-manager -n kuadrant-system 2>/dev/null && \
+kubectl delete pod -n kuadrant-system -l control-plane=controller-manager 2>/dev/null && \
   echo "   ✅ Kuadrant operator restarted" || \
   echo "   ⚠️  Could not restart Kuadrant operator"
 
@@ -456,6 +456,8 @@ echo ""
 echo "Policy Status:"
 kubectl get authpolicy -n openshift-ingress gateway-auth-policy -o jsonpath='{.status.conditions[?(@.type=="Accepted")].status}' 2>/dev/null | xargs echo "  AuthPolicy:"
 kubectl get tokenratelimitpolicy -n openshift-ingress gateway-token-rate-limits -o jsonpath='{.status.conditions[?(@.type=="Accepted")].status}' 2>/dev/null | xargs echo "  TokenRateLimitPolicy:"
+
+
 
 echo ""
 echo "Policy Enforcement Status:"
@@ -570,10 +572,14 @@ echo ""
 echo "6. Test rate limiting (200 OK followed by 429 Rate Limit Exceeded after about 4 requests):"
 echo "   for i in {1..16}; do curl -sSk -o /dev/null -w \"%{http_code}\\n\" -H \"Authorization: Bearer \$TOKEN\" -H \"Content-Type: application/json\" -d \"{\\\"model\\\": \\\"\${MODEL_NAME}\\\", \\\"prompt\\\": \\\"Hello\\\", \\\"max_tokens\\\": 50}\" \"\${MODEL_URL}\"; done"
 echo ""
-echo "7. Check metrics generation:"
+echo "7. Run validation script (Runs all the checks again):"
+echo "   ./deployment/scripts/validate-deployment.sh"
+echo ""
+echo "8. Check metrics generation:"
 echo "   kubectl port-forward -n kuadrant-system svc/limitador-limitador 8080:8080 &"
 echo "   curl http://localhost:8080/metrics | grep -E '(authorized_hits|authorized_calls|limited_calls)'"
 echo ""
-echo "8. Access Prometheus to view metrics:"
+echo "9. Access Prometheus to view metrics:"
 echo "   kubectl port-forward -n openshift-monitoring svc/prometheus-k8s 9090:9091 &"
 echo "   # Open http://localhost:9090 in browser and search for: authorized_hits, authorized_calls, limited_calls"
+echo ""
