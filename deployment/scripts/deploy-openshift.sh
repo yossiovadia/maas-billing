@@ -242,7 +242,7 @@ echo "   Cluster domain: $CLUSTER_DOMAIN"
 
 echo "   Deploying Gateway and GatewayClass..."
 cd "$PROJECT_ROOT"
-envsubst < deployment/base/networking/gateway-api.yaml | kubectl apply --server-side=true --force-conflicts -f -
+kubectl apply --server-side=true --force-conflicts -f <(envsubst '$CLUSTER_DOMAIN' < deployment/base/networking/gateway-api.yaml)
 
 echo ""
 echo "5️⃣ Checking for OpenDataHub/RHOAI KServe..."
