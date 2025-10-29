@@ -44,13 +44,13 @@ deployment/scripts/
 
 ```bash
 # Check prerequisites
-./deployment/scripts/setup-kind.sh --check
+./deployment/scripts/kind/setup-kind.sh --check
 
 # Full setup (< 15 minutes)
-./deployment/scripts/setup-kind.sh
+./deployment/scripts/kind/setup-kind.sh
 
 # Cleanup
-./deployment/scripts/cleanup-kind.sh
+./deployment/scripts/kind/cleanup-kind.sh
 ```
 
 ## 🏗️ Architecture

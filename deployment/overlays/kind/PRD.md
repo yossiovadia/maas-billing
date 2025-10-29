@@ -106,7 +106,7 @@ This creates barriers for:
   - Kuadrant installation (Helm-based instead of OLM)
 
 #### 3. Setup Script
-**File**: `deployment/scripts/setup-kind.sh`
+**File**: `deployment/scripts/kind/setup-kind.sh`
 - Prerequisites check (Docker, kubectl, kind, istioctl, helm)
 - Kind cluster creation with config
 - Dependency installation (Gateway API, cert-manager, Istio, Kuadrant, KServe)
@@ -147,8 +147,8 @@ This creates barriers for:
 **Deliverables:**
 - `deployment/overlays/kind/kind-config.yaml`
 - `deployment/overlays/kind/kustomization.yaml`
-- `deployment/scripts/setup-kind.sh`
-- `deployment/scripts/cleanup-kind.sh`
+- `deployment/scripts/kind/setup-kind.sh`
+- `deployment/scripts/kind/cleanup-kind.sh`
 
 #### Phase 2: Component Patches (Week 2)
 - [ ] Gateway API patches (Istio GatewayClass)
@@ -204,9 +204,11 @@ deployment/
 │           ├── maas-api-patch.yaml
 │           └── kuadrant-config.yaml
 └── scripts/
-    ├── setup-kind.sh             # NEW - Automated Kind setup
-    ├── cleanup-kind.sh           # NEW - Cluster cleanup
-    └── validate-kind.sh          # NEW - Post-deployment validation
+    └── kind/                      # NEW - Kind-specific scripts
+        ├── setup-kind.sh          # Automated Kind setup
+        ├── cleanup-kind.sh        # Cluster cleanup
+        ├── install-prerequisites.sh # Cross-platform installer
+        └── validate-kind.sh       # Post-deployment validation (TODO)
 ```
 
 ## Prerequisites

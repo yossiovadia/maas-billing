@@ -11,13 +11,13 @@ This directory contains configuration for running MaaS locally using [Kubernetes
 
 ```bash
 # 1. Prerequisites check
-./deployment/scripts/setup-kind.sh --check
+./deployment/scripts/kind/setup-kind.sh --check
 
 # 2. Create Kind cluster and deploy MaaS
-./deployment/scripts/setup-kind.sh
+./deployment/scripts/kind/setup-kind.sh
 
 # 3. Verify deployment
-./deployment/scripts/validate-kind.sh
+./deployment/scripts/kind/validate-kind.sh
 ```
 
 ## Prerequisites
@@ -208,7 +208,7 @@ helm upgrade --install kuadrant-operator kuadrant/kuadrant-operator \
 kind delete cluster --name maas-local
 
 # Or use cleanup script
-./deployment/scripts/cleanup-kind.sh
+./deployment/scripts/kind/cleanup-kind.sh
 ```
 
 ## Known Limitations

@@ -6,6 +6,9 @@ metadata:
 
 # Inherit base configuration
 resources:
+  # Namespaces (must be first)
+  - namespaces.yaml
+
   # Core gateway routes and networking
   - ../../base/networking
 
@@ -17,21 +20,80 @@ resources:
 
   # Gateway API resources (Kind-specific)
   - gateway-class.yaml
-  - httproutes.yaml
-
-# Namespace for all resources (if needed)
-# namespace: maas-api
+  - gateway-certificate.yaml
 
 # Patches for Kind-specific customizations
 patches:
-  # Patch Gateway to use Istio GatewayClass instead of OpenShift
+  # Patch Gateway to use Istio GatewayClass and update namespace
   - target:
       kind: Gateway
-      name: maas-gateway
+      name: maas-default-gateway
     patch: |-
+      - op: replace
+        path: /metadata/name
+        value: maas-gateway
+      - op: replace
+        path: /metadata/namespace
+        value: maas-api
       - op: replace
         path: /spec/gatewayClassName
         value: istio
+      - op: replace
+        path: /spec/listeners/0/hostname
+        value: localhost
+      - op: replace
+        path: /spec/listeners/1/hostname
+        value: localhost
+
+  # Patch HTTPRoute to point to the correct gateway and namespace
+  - target:
+      kind: HTTPRoute
+      name: maas-api-route
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs/0/name
+        value: maas-gateway
+      - op: replace
+        path: /spec/parentRefs/0/namespace
+        value: maas-api
+      - op: add
+        path: /spec/hostnames
+        value: ["localhost", "maas.local"]
+
+  # Patch Gateway auth policy namespace
+  - target:
+      kind: AuthPolicy
+      name: gateway-auth-policy
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: maas-api
+
+  # Patch Gateway rate limit policies namespace
+  - target:
+      kind: RateLimitPolicy
+      name: gateway-rate-limits
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: maas-api
+
+  - target:
+      kind: TokenRateLimitPolicy
+      name: gateway-token-rate-limits
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: maas-api
+
+  # Patch openshift-ai-inference Gateway (disable for Kind)
+  - target:
+      kind: Gateway
+      name: openshift-ai-inference
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: maas-api
 
   # TODO: Add more patches as needed
   # - patch: |-
@@ -61,9 +123,10 @@ patches:
 #   newTag: latest
 
 # Labels to add to all resources
-commonLabels:
-  platform: kind
-  environment: local-dev
+labels:
+  - pairs:
+      platform: kind
+      environment: local-dev
 
 # Annotations to add to all resources
 commonAnnotations:
