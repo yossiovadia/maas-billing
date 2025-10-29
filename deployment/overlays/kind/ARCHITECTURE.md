@@ -2,7 +2,67 @@
 
 This document provides visual architecture diagrams for the MaaS platform running on Kubernetes Kind.
 
-## Overall System Architecture
+## Overall System Architecture (High-Level)
+
+```mermaid
+graph TB
+    subgraph "Docker Desktop on Mac M4"
+        subgraph "Kind Cluster (maas-local)"
+
+            subgraph "Gateway Layer"
+                GW[Istio Gateway<br/>localhost:80/443]
+            end
+
+            subgraph "Policy Layer"
+                AUTH[Authorino<br/>API Key Auth]
+                LIMIT[Limitador<br/>Rate Limiting]
+            end
+
+            subgraph "Application Layer"
+                MAAS[MaaS API<br/>:8080]
+                LLM[llm-katan<br/>Qwen2.5-0.5B<br/>:8000<br/><i>Could use KServe</i>]
+            end
+
+            subgraph "Infrastructure"
+                ISTIO[Istio Service Mesh]
+                CERT[cert-manager]
+                KUADRANT[Kuadrant Operators]
+            end
+        end
+
+        PORTS[Port Mapping<br/>80→80, 443→443]
+    end
+
+    USER[Developer] -->|curl/browser| PORTS
+    PORTS --> GW
+
+    GW -->|/maas-api/*| MAAS
+    GW -->|/v1/*| LLM
+
+    GW -.->|checks| AUTH
+    GW -.->|checks| LIMIT
+
+    ISTIO -.->|manages| GW
+    CERT -.->|TLS certs| GW
+    KUADRANT -.->|deploys| AUTH
+    KUADRANT -.->|deploys| LIMIT
+
+    classDef user fill:#64B5F6,stroke:#1976D2,stroke-width:3px
+    classDef gateway fill:#2196F3,stroke:#0D47A1,stroke-width:3px
+    classDef policy fill:#9C27B0,stroke:#4A148C,stroke-width:2px
+    classDef app fill:#4CAF50,stroke:#1B5E20,stroke-width:3px
+    classDef llm fill:#FF9800,stroke:#E65100,stroke-width:3px
+    classDef infra fill:#78909C,stroke:#37474F,stroke-width:2px
+
+    class USER user
+    class GW,PORTS gateway
+    class AUTH,LIMIT policy
+    class MAAS app
+    class LLM llm
+    class ISTIO,CERT,KUADRANT infra
+```
+
+## Detailed System Architecture
 
 ```mermaid
 graph TB
@@ -72,7 +132,7 @@ graph TB
     style LLMKatan fill:#FF9800
     style Gateway fill:#2196F3
     style Kuadrant fill:#9C27B0
-    style Browser fill:#FFC107
+    style Browser fill:#64B5F6
 ```
 
 ## Request Flow Architecture
