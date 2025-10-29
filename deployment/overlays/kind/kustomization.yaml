@@ -1,0 +1,71 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: maas-kind-overlay
+
+# Inherit base configuration
+resources:
+  # Core gateway routes and networking
+  - ../../base/networking
+
+  # Core MaaS API components
+  - ../../base/maas-api
+
+  # Policies
+  - ../../base/policies
+
+  # Gateway API resources (Kind-specific)
+  - gateway-class.yaml
+  - httproutes.yaml
+
+# Namespace for all resources (if needed)
+# namespace: maas-api
+
+# Patches for Kind-specific customizations
+patches:
+  # Patch Gateway to use Istio GatewayClass instead of OpenShift
+  - target:
+      kind: Gateway
+      name: maas-gateway
+    patch: |-
+      - op: replace
+        path: /spec/gatewayClassName
+        value: istio
+
+  # TODO: Add more patches as needed
+  # - patch: |-
+  #     apiVersion: apps/v1
+  #     kind: Deployment
+  #     metadata:
+  #       name: maas-api
+  #     spec:
+  #       template:
+  #         spec:
+  #           containers:
+  #           - name: maas-api
+  #             env:
+  #             - name: CLUSTER_DOMAIN
+  #               value: "localhost"
+
+# ConfigMap generators (if needed for Kind-specific config)
+# configMapGenerator:
+# - name: kind-config
+#   literals:
+#   - PLATFORM=kind
+#   - CLUSTER_DOMAIN=localhost
+
+# Images (pin to specific versions for stability)
+# images:
+# - name: quay.io/kuadrant/limitador
+#   newTag: latest
+
+# Labels to add to all resources
+commonLabels:
+  platform: kind
+  environment: local-dev
+
+# Annotations to add to all resources
+commonAnnotations:
+  managed-by: kustomize
+  platform: kind
