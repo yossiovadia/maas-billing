@@ -598,3 +598,74 @@ graph LR
 - **CPU**: 4 cores recommended
 - **Memory**: 8GB minimum, 16GB recommended
 - **Disk**: 20GB free space
+
+## KServe Architecture
+
+The Kind setup includes **full KServe support with Knative Serving**, providing a production-like environment that matches the OpenShift deployment architecture.
+
+### Why KServe + Knative?
+
+**In Production (OpenShift):**
+- Models are deployed as KServe `InferenceService` resources
+- MaaS API discovers models by querying KServe InferenceServices
+- Automatic scaling, versioning, and traffic management
+
+**In Kind (Local Development):**
+- Same architecture as production
+- Models can be deployed as `InferenceService` (production-like) or plain Deployments (simpler)
+- MaaS API supports both discovery mechanisms
+- Full integration testing before deploying to production
+
+### Components
+
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| **Knative Serving** | v1.10.1 | Serverless platform for KServe with auto-scaling |
+| **KServe** | v0.11.0 | Model serving orchestration |
+| **Istio** | minimal profile | Service mesh and networking |
+
+### KServe Request Flow
+
+```mermaid
+graph LR
+    Client[Client Request] --> Kind[Kind Port :80]
+    Kind --> Gateway[Istio Gateway<br/>:30080]
+    Gateway --> Knative[Knative Service<br/>llm-katan-predictor]
+    Knative --> KServe[KServe Container<br/>llm-katan pod]
+    KServe --> vLLM[vLLM Model Server]
+```
+
+### InferenceService vs Plain Deployment
+
+**Plain Deployment (simpler, used for llm-katan):**
+```yaml
+apiVersion: apps/v1
+kind: Deployment  # Manual deployment
+---
+apiVersion: v1
+kind: Service  # Manual service
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute  # Manual routing
+```
+
+**InferenceService (production-like, optional):**
+```yaml
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: llm-katan
+spec:
+  predictor:
+    containers:
+    - name: kserve-container
+      image: ghcr.io/.../llm-katan:latest
+```
+
+**KServe automatically creates:**
+- ✅ Knative Service
+- ✅ Kubernetes Deployment
+- ✅ Service endpoints
+- ✅ Auto-scaling configuration
+- ✅ Traffic routing
+

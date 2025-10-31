@@ -9,43 +9,33 @@ resources:
   # Namespaces (must be first)
   - namespaces.yaml
 
-  # Core gateway routes and networking
-  - ../../base/networking
-
   # Core MaaS API components
   - ../../base/maas-api
 
-  # Policies
+  # Policies (but not base networking which includes Gateway)
   - ../../base/policies
 
-  # Gateway API resources (Kind-specific)
+  # Gateway API resources (Kind-specific - replaces base/networking)
   - gateway-class.yaml
   - gateway-certificate.yaml
+  - gateway.yaml  # Kind-specific Gateway in istio-system
+  - kuadrant.yaml  # Kuadrant instance (required for policies)
+
+  # RBAC for 3-tier access control
+  - rbac
 
 # Patches for Kind-specific customizations
 patches:
-  # Patch Gateway to use Istio GatewayClass and update namespace
+  # Patch maas-api deployment to use Never for local images
   - target:
-      kind: Gateway
-      name: maas-default-gateway
+      kind: Deployment
+      name: maas-api
     patch: |-
       - op: replace
-        path: /metadata/name
-        value: maas-gateway
-      - op: replace
-        path: /metadata/namespace
-        value: maas-api
-      - op: replace
-        path: /spec/gatewayClassName
-        value: istio
-      - op: replace
-        path: /spec/listeners/0/hostname
-        value: localhost
-      - op: replace
-        path: /spec/listeners/1/hostname
-        value: localhost
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
 
-  # Patch HTTPRoute to point to the correct gateway and namespace
+  # Patch HTTPRoute to point to the Gateway in istio-system
   - target:
       kind: HTTPRoute
       name: maas-api-route
@@ -55,28 +45,35 @@ patches:
         value: maas-gateway
       - op: replace
         path: /spec/parentRefs/0/namespace
-        value: maas-api
+        value: istio-system
       - op: add
         path: /spec/hostnames
         value: ["localhost", "maas.local"]
 
-  # Patch Gateway auth policy namespace
+  # Patch Gateway auth policy namespace and target to istio-system/maas-gateway
+  # Keep authorization section for per-model RBAC (like production OpenShift)
   - target:
       kind: AuthPolicy
       name: gateway-auth-policy
     patch: |-
       - op: replace
         path: /metadata/namespace
-        value: maas-api
+        value: istio-system
+      - op: replace
+        path: /spec/targetRef/name
+        value: maas-gateway
 
-  # Patch Gateway rate limit policies namespace
+  # Patch Gateway rate limit policies namespace and target to istio-system/maas-gateway
   - target:
       kind: RateLimitPolicy
       name: gateway-rate-limits
     patch: |-
       - op: replace
         path: /metadata/namespace
-        value: maas-api
+        value: istio-system
+      - op: replace
+        path: /spec/targetRef/name
+        value: maas-gateway
 
   - target:
       kind: TokenRateLimitPolicy
@@ -84,16 +81,44 @@ patches:
     patch: |-
       - op: replace
         path: /metadata/namespace
-        value: maas-api
+        value: istio-system
+      - op: replace
+        path: /spec/targetRef/name
+        value: maas-gateway
 
-  # Patch openshift-ai-inference Gateway (disable for Kind)
+  # Patch tier mapping to use ServiceAccount groups for Kind
   - target:
-      kind: Gateway
-      name: openshift-ai-inference
+      kind: ConfigMap
+      name: tier-to-group-mapping
     patch: |-
       - op: replace
-        path: /metadata/namespace
-        value: maas-api
+        path: /data/tiers
+        value: |
+          # Free tier - maps to free-user ServiceAccount
+          - name: free
+            level: 0
+            groups:
+              - system:serviceaccount:maas-api:free-user
+              - system:serviceaccount:maas-api:demo-user
+              - tier-free-users
+              - system:authenticated
+
+          # Premium tier - maps to premium-user ServiceAccount
+          - name: premium
+            level: 1
+            groups:
+              - system:serviceaccount:maas-api:premium-user
+              - tier-premium-users
+              - premium-group
+
+          # Enterprise tier - maps to enterprise-user ServiceAccount
+          - name: enterprise
+            level: 2
+            groups:
+              - system:serviceaccount:maas-api:enterprise-user
+              - tier-enterprise-users
+              - enterprise-group
+              - admin-group
 
   # TODO: Add more patches as needed
   # - patch: |-
@@ -117,10 +142,11 @@ patches:
 #   - PLATFORM=kind
 #   - CLUSTER_DOMAIN=localhost
 
-# Images (pin to specific versions for stability)
-# images:
-# - name: quay.io/kuadrant/limitador
-#   newTag: latest
+# Images - use local build with fallback fix
+images:
+- name: quay.io/opendatahub/maas-api
+  newName: localhost/maas-api
+  newTag: dev
 
 # Labels to add to all resources
 labels:
