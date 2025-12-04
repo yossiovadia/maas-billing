@@ -15,7 +15,8 @@
 #      - Admin user (cluster-admin role)
 #      - Edit user (edit role) 
 #      - View user (view role)
-#   5. Run smoke tests for each user
+#   5. Run token metadata verification (as admin user)
+#   6. Run smoke tests for each user
 # 
 # USAGE:
 #   ./test/e2e/scripts/prow_run_smoke_test.sh
@@ -23,6 +24,7 @@
 # ENVIRONMENT VARIABLES:
 #   SKIP_VALIDATION - Skip deployment validation (default: false)
 #   SKIP_SMOKE      - Skip smoke tests (default: false)
+#   SKIP_TOKEN_VERIFICATION - Skip token metadata verification (default: false)
 #
 # =============================================================================
 
@@ -51,6 +53,7 @@ PROJECT_ROOT="$(find_project_root)"
 # Options (can be set as environment variables)
 SKIP_VALIDATION=${SKIP_VALIDATION:-false}
 SKIP_SMOKE=${SKIP_SMOKE:-false}
+SKIP_TOKEN_VERIFICATION=${SKIP_TOKEN_VERIFICATION:-false}
 
 print_header() {
     echo ""
@@ -191,6 +194,21 @@ run_smoke_tests() {
     fi
 }
 
+run_token_verification() {
+    echo "-- Token Metadata Verification --"
+    
+    if [ "$SKIP_TOKEN_VERIFICATION" = false ]; then
+        if ! (cd "$PROJECT_ROOT" && bash scripts/verify-tokens-metadata-logic.sh); then
+            echo "❌ ERROR: Token metadata verification failed"
+            exit 1
+        else
+            echo "✅ Token metadata verification completed successfully"
+        fi
+    else
+        echo "Skipping token metadata verification..."
+    fi
+}
+
 # Main execution
 print_header "Deploying Maas on OpenShift"
 check_prerequisites
@@ -241,6 +259,11 @@ print_header "Running tests for all users"
 print_header "Running Maas e2e Tests as admin user"
 ADMIN_TOKEN=$(oc create token tester-admin-user -n default)
 oc login --token "$ADMIN_TOKEN" --server "$K8S_CLUSTER_URL"
+
+# Run token verification as admin user (needs valid oc login first)
+print_header "Verifying Token Metadata Logic"
+run_token_verification
+
 run_smoke_tests
 
 # Test edit user  
